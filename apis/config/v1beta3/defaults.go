@@ -102,6 +102,14 @@ var (
 	DefaultSySchedProfileNamespace = "default"
 	// DefaultSySchedProfileName is the name of the default syscall profile CR for SySched plugin
 	DefaultSySchedProfileName = "all-syscalls"
+
+	// Defaults for DiskIO aware
+	// defaultDiskIOScoreStrategy is the default score strategy for disk io aware plugin
+	defaultDiskIOScoreStrategy string = "LeastAllocated"
+	// defaultConfigMapName is the default name of the ConfigMap which contains the urls to download normalization models
+	defaultConfigMapName string = "normalization-func"
+	// defaultConfigMapNameSpace is the default namespace of the ConfigMap which contains the urls to download normalization models
+	defaultConfigMapNameSpace string = "default"
 )
 
 // SetDefaults_CoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -248,5 +256,20 @@ func SetDefaults_SySchedArgs(obj *SySchedArgs) {
 
 	if obj.DefaultProfileName == nil {
 		obj.DefaultProfileName = &DefaultSySchedProfileName
+	}
+}
+
+// SetDefaults_ResourceIOArgs sets the default parameters for ResourceIO plugin.
+func SetDefaults_DiskIOArgs(obj *DiskIOArgs) {
+	if obj.ScoreStrategy == nil {
+		obj.ScoreStrategy = &defaultDiskIOScoreStrategy
+	}
+
+	if obj.ConfigMapName == nil {
+		obj.ConfigMapName = &defaultConfigMapName
+	}
+
+	if obj.ConfigMapNamespace == nil {
+		obj.ConfigMapName = &defaultConfigMapNameSpace
 	}
 }
