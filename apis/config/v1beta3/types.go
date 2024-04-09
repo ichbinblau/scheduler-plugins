@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1beta3
 
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schedulerconfigv1 "k8s.io/kube-scheduler/config/v1"
+	schedulerconfigv1beta3 "k8s.io/kube-scheduler/config/v1beta3"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -55,7 +55,7 @@ type NodeResourcesAllocatableArgs struct {
 	// An example resource set might include "cpu" (millicores) and "memory" (bytes)
 	// with weights of 1<<20 and 1 respectfully. That would mean 1 MiB has equivalent
 	// weight as 1 millicore.
-	Resources []schedulerconfigv1.ResourceSpec `json:"resources,omitempty"`
+	Resources []schedulerconfigv1beta3.ResourceSpec `json:"resources,omitempty"`
 
 	// Whether to prioritize nodes with least or most allocatable resources.
 	Mode ModeType `json:"mode,omitempty"`
@@ -152,8 +152,8 @@ const (
 )
 
 type ScoringStrategy struct {
-	Type      ScoringStrategyType              `json:"type,omitempty"`
-	Resources []schedulerconfigv1.ResourceSpec `json:"resources,omitempty"`
+	Type      ScoringStrategyType                   `json:"type,omitempty"`
+	Resources []schedulerconfigv1beta3.ResourceSpec `json:"resources,omitempty"`
 }
 
 // ForeignPodsDetectMode is a "string" type.
@@ -213,7 +213,10 @@ type NodeResourceTopologyMatchArgs struct {
 
 	// ScoringStrategy a scoring model that determine how the plugin will score the nodes.
 	ScoringStrategy *ScoringStrategy `json:"scoringStrategy,omitempty"`
-	// If > 0, enables the caching facilities of the reserve plugin - which must be enabled
+	// CacheResyncPeriodSeconds sets the resync period, in seconds, between the internal
+	// NodeResourceTopoology cache and the apiserver. If present and greater than zero,
+	// implicitely enables the caching. If zero, disables the caching entirely.
+	// If the cache is enabled, the Reserve plugin must be enabled.
 	CacheResyncPeriodSeconds *int64 `json:"cacheResyncPeriodSeconds,omitempty"`
 	// if set to true, exclude node from scheduling if there are any reserved pods for given node
 	// this option takes precedence over CacheResyncPeriodSeconds
@@ -226,7 +229,7 @@ type NodeResourceTopologyMatchArgs struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PreemptionTolerationArgs reuses DefaultPluginArgs.
-type PreemptionTolerationArgs schedulerconfigv1.DefaultPreemptionArgs
+type PreemptionTolerationArgs schedulerconfigv1beta3.DefaultPreemptionArgs
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -275,3 +278,4 @@ type DiskIOArgs struct {
 	ConfigMapName      *string `json:"configMapName,omitempty"`
 	ConfigMapNamespace *string `json:"configMapNamespace,omitempty"`
 }
+

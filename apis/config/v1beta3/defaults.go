@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,30 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1beta3
 
 import (
 	"strconv"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	schedulerconfigv1 "k8s.io/kube-scheduler/config/v1"
-	k8sschedulerconfigv1 "k8s.io/kubernetes/pkg/scheduler/apis/config/v1"
+	schedulerconfigv1beta3 "k8s.io/kube-scheduler/config/v1beta3"
+	k8sschedulerconfigv1beta3 "k8s.io/kubernetes/pkg/scheduler/apis/config/v1beta3"
 )
 
 var (
-	defaultPermitWaitingTimeSeconds int64 = 60
-	defaultPodGroupBackoffSeconds   int64 = 0
-
-	defaultNodeResourcesAllocatableMode = Least
+	defaultPermitWaitingTimeSeconds     int64 = 60
+	defaultPodGroupBackoffSeconds       int64 = 0
+	defaultNodeResourcesAllocatableMode       = Least
 
 	// defaultResourcesToWeightMap is used to set the default resourceToWeight map for CPU and memory
 	// used by the NodeResourcesAllocatable scoring plugin.
 	// The base unit for CPU is millicore, while the base using for memory is a byte.
 	// The default CPU weight is 1<<20 and default memory weight is 1. That means a millicore
 	// has a weighted score equivalent to 1 MiB.
-	defaultNodeResourcesAllocatableResourcesToWeightMap = []schedulerconfigv1.ResourceSpec{
+	defaultNodeResourcesAllocatableResourcesToWeightMap = []schedulerconfigv1beta3.ResourceSpec{
 		{Name: "cpu", Weight: 1 << 20}, {Name: "memory", Weight: 1},
 	}
 
@@ -80,7 +80,7 @@ var (
 	// DefaultInsecureSkipVerify is whether to skip the certificate verification
 	DefaultInsecureSkipVerify = true
 
-	defaultResourceSpec = []schedulerconfigv1.ResourceSpec{
+	defaultResourceSpec = []schedulerconfigv1beta3.ResourceSpec{
 		{Name: string(v1.ResourceCPU), Weight: 1},
 		{Name: string(v1.ResourceMemory), Weight: 1},
 	}
@@ -180,7 +180,7 @@ func SetDefaults_LowRiskOverCommitmentArgs(args *LowRiskOverCommitmentArgs) {
 	} else {
 		for r, w := range args.RiskLimitWeights {
 			if w < 0 || w > 1 {
-				(args.RiskLimitWeights)[r] = DefaultRiskLimitWeight
+				args.RiskLimitWeights[r] = DefaultRiskLimitWeight
 			}
 		}
 	}
@@ -223,7 +223,7 @@ func SetDefaults_NodeResourceTopologyMatchArgs(obj *NodeResourceTopologyMatchArg
 
 // SetDefaults_PreemptionTolerationArgs reuses SetDefaults_DefaultPreemptionArgs
 func SetDefaults_PreemptionTolerationArgs(obj *PreemptionTolerationArgs) {
-	k8sschedulerconfigv1.SetDefaults_DefaultPreemptionArgs((*schedulerconfigv1.DefaultPreemptionArgs)(obj))
+	k8sschedulerconfigv1beta3.SetDefaults_DefaultPreemptionArgs((*schedulerconfigv1beta3.DefaultPreemptionArgs)(obj))
 }
 
 // SetDefaults_TopologicalSortArgs sets the default parameters for TopologicalSortArgs plugin.
@@ -273,3 +273,4 @@ func SetDefaults_DiskIOArgs(obj *DiskIOArgs) {
 		obj.ConfigMapName = &defaultConfigMapNameSpace
 	}
 }
+
