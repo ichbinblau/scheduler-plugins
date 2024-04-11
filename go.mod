@@ -183,3 +183,5 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.29.4
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.29.4
 )
+
+replace github.com/intel/cloud-resource-scheduling-and-isolation => ./cloud-resource-scheduling-and-isolation/
