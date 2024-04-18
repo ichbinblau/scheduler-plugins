@@ -17,9 +17,9 @@ limitations under the License.
 package validation
 
 import (
+	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-
 	"sigs.k8s.io/scheduler-plugins/apis/config"
 )
 
@@ -28,6 +28,11 @@ var validScoringStrategy = sets.NewString(
 	string(config.BalancedAllocation),
 	string(config.LeastAllocated),
 	string(config.LeastNUMANodes),
+)
+
+var validDiskIOScoreStrategy = sets.NewString(
+	string(config.MostAllocated),
+	string(config.LeastAllocated),
 )
 
 func ValidateNodeResourceTopologyMatchArgs(path *field.Path, args *config.NodeResourceTopologyMatchArgs) error {
@@ -43,6 +48,47 @@ func ValidateNodeResourceTopologyMatchArgs(path *field.Path, args *config.NodeRe
 func validateScoringStrategyType(scoringStrategy config.ScoringStrategyType, path *field.Path) *field.Error {
 	if !validScoringStrategy.Has(string(scoringStrategy)) {
 		return field.Invalid(path, scoringStrategy, "invalid ScoringStrategyType")
+	}
+	return nil
+}
+
+func ValidateDiskIOArgs(path *field.Path, args *config.DiskIOArgs) error {
+	var allErrs field.ErrorList
+	scoreStrategyPath := path.Child("scoringStrategy")
+	if err := validateDiskIOScoreStrategy(args.ScoreStrategy, scoreStrategyPath); err != nil {
+		allErrs = append(allErrs, err)
+	}
+	configmapNamePath := path.Child("configMapName")
+	if err := validateDiskIOConfigMapName(args.ConfigMapName, configmapNamePath); err != nil {
+		allErrs = append(allErrs, err)
+	}
+	configmapNamespacePath := path.Child("configMapNamespace")
+	if err := validateDiskIOConfigMapNamespace(args.ConfigMapName, configmapNamespacePath); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	return allErrs.ToAggregate()
+}
+
+func validateDiskIOScoreStrategy(scoreStrategy string, path *field.Path) *field.Error {
+	if !validDiskIOScoreStrategy.Has(string(scoreStrategy)) {
+		return field.Invalid(path, scoreStrategy, "invalid ScoreStrategy")
+	}
+	return nil
+}
+
+func validateDiskIOConfigMapName(name string, path *field.Path) *field.Error {
+	errs := apimachineryvalidation.NameIsDNSSubdomain(string(name), false)
+	if len(errs) > 0 {
+		return field.Invalid(path, name, "invalid ConfigMap name")
+	}
+	return nil
+}
+
+func validateDiskIOConfigMapNamespace(ns string, path *field.Path) *field.Error {
+	errs := apimachineryvalidation.ValidateNamespaceName(string(ns), false)
+	if len(errs) > 0 {
+		return field.Invalid(path, ns, "invalid ConfigMap namespace")
 	}
 	return nil
 }

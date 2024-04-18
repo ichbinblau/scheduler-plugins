@@ -22,21 +22,21 @@ type NormalizerManager struct {
 	loader *PluginLoader
 }
 
-func NewNormalizerManager(base string) *NormalizerManager {
+func NewNormalizerManager(base string, m int) *NormalizerManager {
 	return &NormalizerManager{
 		store:  NewnStore(),
-		loader: &PluginLoader{baseDir: base},
+		loader: &PluginLoader{baseDir: base, maxRetries: m},
 	}
 }
 
 // LoadPlugin implements the interface method
-func (pm *NormalizerManager) LoadPlugins(l PlList, maxRetries int, workers int) error {
+func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
 	// load plugins
 	if len(l) == 0 {
 		return errors.New("plugin list cannot be empty")
 	}
 
-	pls := make(chan PlConfig, 100) // queue of download jobs
+	pls := make(chan PlConfig, 10) // queue of download jobs
 	var wg sync.WaitGroup
 
 	pm.Lock()
@@ -52,16 +52,9 @@ func (pm *NormalizerManager) LoadPlugins(l PlList, maxRetries int, workers int) 
 				}
 				norm, err := pm.loader.LoadPlugin(pl)
 				if err != nil {
-					retries := maxRetries
-					if retries > 0 {
-						klog.Infof("Retrying load for %s\n", pl.Source)
-						retries--
-						pls <- pl // requeue job
-					} else {
-						klog.Infof("Failed to load %s after %i attempts\n", maxRetries, pl.Source)
-					}
+					klog.Infof("Failed to load %v: %v\n", pl.Source, err)
 				}
-				// use Vendor+Model as key
+				// use Vendor+Model as key, normalizer functions as value
 				pm.store.Set(fmt.Sprintf("%s-%s", pl.Vendor, pl.Model), norm)
 			}
 		}()
@@ -92,7 +85,7 @@ func (pm *NormalizerManager) UnloadPlugin(name string) error {
 
 // GetPlugin implements the interface method
 func (pm *NormalizerManager) GetNormalizer(name string) (Normalize, error) {
-	// read lock or not?
+
 	pm.Lock()
 	defer pm.Unlock()
 	exec, err := pm.store.Get(name)
