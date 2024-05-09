@@ -10,7 +10,7 @@ import (
 type ExtendedResource interface {
 	Name() string
 	// todo
-	AddPod(pod *v1.Pod, request interface{}, client kubernetes.Interface) ([]struct{}, bool, error)
+	AddPod(pod *v1.Pod, request interface{}, client kubernetes.Interface) ([]struct{}, bool, error) // change interface to struct
 	RemovePod(pod *v1.Pod, client kubernetes.Interface) error
 	Clone() ExtendedResource
 	AdmitPod(pod *v1.Pod) (interface{}, error) // return pod requested resource and error msg

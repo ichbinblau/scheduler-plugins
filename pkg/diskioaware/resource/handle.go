@@ -14,22 +14,22 @@ type Handle interface {
 }
 
 type CacheHandle interface {
-	// AddCacheNodeInfo(string, ioiv1.ResourceConfigSpec) error
-	// InitNodeStatus(string, ioiv1.ResourceConfigSpec)
+	// AddCacheNodeInfo(string, ioiv1.ResourceConfigSpec) error // Devices
+	// InitNodeStatus(string, ioiv1.ResourceConfigSpec) // skip
 	DeleteCacheNodeInfo(string) error
 	// UpdateCacheNodeStatus(string, *ioiv1.NodeIOStatusStatus) error
-	CriticalPod(annotations map[string]string) bool
-	// GetRequestByAnnotation(*v1.Pod, string, bool) (map[string]*aggregator.IOResourceRequest, interface{}, error)
+	CriticalPod(annotations map[string]string) bool // GA or BE pod
+	// GetRequestByAnnotation(*v1.Pod, string, bool) (map[string]*aggregator.IOResourceRequest, interface{}, error) // skip
 	NodeRegistered(string) bool
 	// AddPod(*v1.Pod, string, interface{}, kubernetes.Interface) ([]*aggregator.IOResourceRequest, bool, error) // input pod request interface
 	RemovePod(*v1.Pod, string, kubernetes.Interface) error
-	AdmitPod(*v1.Pod, string) (interface{}, error)               // output pod request interface
+	AdmitPod(*v1.Pod, string) (interface{}, error)               // change interface to struct
 	CanAdmitPod(string, interface{}) (bool, interface{}, error)  // input pod request interface, output node's resource status interface
-	NodePressureRatio(interface{}, interface{}) (float64, error) // input pod request interface, and node's resource status interface
+	NodePressureRatio(interface{}, interface{}) (float64, error) // to be removed
 	PrintCacheInfo()
-	NodeHasIoiLabel(*v1.Node) bool
+	// NodeHasIoiLabel(*v1.Node) bool
 	// InitBENum(string, ioiv1.ResourceConfigSpec)
-	UpdatePVC(*v1.PersistentVolumeClaim, string, string, int64, bool) error
+	// UpdatePVC(*v1.PersistentVolumeClaim, string, string, int64, bool) error
 }
 
 type HandleBase struct {
