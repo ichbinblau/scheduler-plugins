@@ -4,23 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	externalinformer "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/apis/config/validation"
+	"sigs.k8s.io/scheduler-plugins/apis/scheduling"
+	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/diskio"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/normalizer"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
 )
 
 type DiskIO struct {
-	rhs    resource.Handle
+	rh     resource.Handle
 	scorer Scorer
 	nm     *normalizer.NormalizerManager
-	client kubernetes.Interface
+	// client        versioned.Interface
+	// sharedFactory externalversions.SharedInformerFactory
 }
 
 const (
@@ -67,6 +72,10 @@ func loadModels(config *config.DiskIOArgs, cmLister corelisters.ConfigMapLister)
 
 // New initializes a new plugin and returns it.
 func New(configuration runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+	d := &DiskIO{
+		rh: diskio.New(),
+	}
+	ctx := context.Background()
 	args, ok := configuration.(*config.DiskIOArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type DiskIOArgs, got %T", args)
@@ -83,29 +92,39 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	if err != nil {
 		return nil, err
 	}
-
+	d.nm = nm
 	// initialize scorer
 	scorer, err := getScorer(args.ScoreStrategy)
 	if err != nil {
 		return nil, err
 	}
+	d.scorer = scorer
 
-	// todo: initialize event handling
-	// watch pod delete
-	// watch static CR add disk info in cache
-	// create status info for each node, watch status cr
+	// initialize disk IO resource handler
+	err = d.rh.Run(resource.NewExtendedCache(), handle.ClientSet())
+	if err != nil {
+		return nil, err
+	}
 
-	// todo: initialize workqueue to send reserve request
-	// new pod: pod 1, exising pod: pod0
-	// [pod0-uid, pod1-uid]
-	// update CR
+	ratelimiter := workqueue.NewItemExponentialFailureRateLimiter(time.Second, 5*time.Second) // todo: load from config
+	resource.IoiContext, err = resource.NewContext(ratelimiter, args.NSWhiteList, handle)
+	if err != nil {
+		return nil, err
+	}
+	go resource.IoiContext.RunWorkerQueue(ctx)
 
-	return &DiskIO{
-		rhs:    nil,
-		scorer: scorer,
-		nm:     nm,
-		client: handle.ClientSet(),
-	}, nil
+	// initialize event handling
+	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
+	nsLister := handle.SharedInformerFactory().Core().V1().Namespaces().Lister()
+	eh := resource.NewIOEventHandler(d.rh, handle, podLister, nsLister)
+
+	podInformer := handle.SharedInformerFactory().Core().V1().Pods().Informer()
+	iof := externalinformer.NewSharedInformerFactory(resource.IoiContext.VClient, 0)
+	err = eh.BuildEvtHandler(ctx, podInformer, iof)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 func (ps *DiskIO) Name() string {
@@ -150,8 +169,9 @@ func (ps *DiskIO) EventsToRegister() []framework.ClusterEvent {
 	// todo: change action type
 	ce := []framework.ClusterEvent{
 		{Resource: framework.Pod, ActionType: framework.All},
-		{Resource: framework.Node, ActionType: framework.Delete | framework.UpdateNodeLabel},
-		{Resource: framework.GVK(fmt.Sprintf("nodestaticioinfoes.v1alpha1.%v", "xyz")), ActionType: framework.All},
+		// {Resource: framework.Node, ActionType: framework.Delete | framework.UpdateNodeLabel},
+		{Resource: framework.GVK(fmt.Sprintf("nodediskdevices.v1alpha1.%v", scheduling.GroupName)), ActionType: framework.Add | framework.Delete},
+		{Resource: framework.GVK(fmt.Sprintf("nodediskiostatses.v1alpha1.%v", scheduling.GroupName)), ActionType: framework.Update},
 	}
 	return ce
 }
