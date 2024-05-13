@@ -47,7 +47,7 @@ func (d *stateData) Clone() framework.StateData {
 }
 
 func loadModels(config *config.DiskIOArgs, cmLister corelisters.ConfigMapLister) (*normalizer.NormalizerManager, error) {
-	name, ns := config.ConfigMapName, config.ConfigMapNamespace
+	name, ns := config.DiskIOModelConfig, config.DiskIOModelConfigNS
 	cm, err := cmLister.ConfigMaps(name).Get(ns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get configmap %s/%s: %v", ns, name, err)
@@ -78,6 +78,7 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	}
 
 	// load disk vendor normalize functions
+	// watch configmap with version
 	nm, err := loadModels(args, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
 	if err != nil {
 		return nil, err
@@ -90,8 +91,14 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	}
 
 	// todo: initialize event handling
+	// watch pod delete
+	// watch static CR add disk info in cache
+	// create status info for each node, watch status cr
 
 	// todo: initialize workqueue to send reserve request
+	// new pod: pod 1, exising pod: pod0
+	// [pod0-uid, pod1-uid]
+	// update CR
 
 	return &DiskIO{
 		rhs:    nil,

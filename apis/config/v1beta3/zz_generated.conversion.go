@@ -227,12 +227,13 @@ func autoConvert_v1beta3_DiskIOArgs_To_config_DiskIOArgs(in *DiskIOArgs, out *co
 	if err := v1.Convert_Pointer_string_To_string(&in.ScoreStrategy, &out.ScoreStrategy, s); err != nil {
 		return err
 	}
-	if err := v1.Convert_Pointer_string_To_string(&in.ConfigMapName, &out.ConfigMapName, s); err != nil {
+	if err := v1.Convert_Pointer_string_To_string(&in.DiskIOModelConfig, &out.DiskIOModelConfig, s); err != nil {
 		return err
 	}
-	if err := v1.Convert_Pointer_string_To_string(&in.ConfigMapNamespace, &out.ConfigMapNamespace, s); err != nil {
+	if err := v1.Convert_Pointer_string_To_string(&in.DiskIOModelConfigNS, &out.DiskIOModelConfigNS, s); err != nil {
 		return err
 	}
+	out.NSWhiteList = *(*[]string)(unsafe.Pointer(&in.NSWhiteList))
 	return nil
 }
 
@@ -245,12 +246,13 @@ func autoConvert_config_DiskIOArgs_To_v1beta3_DiskIOArgs(in *config.DiskIOArgs, 
 	if err := v1.Convert_string_To_Pointer_string(&in.ScoreStrategy, &out.ScoreStrategy, s); err != nil {
 		return err
 	}
-	if err := v1.Convert_string_To_Pointer_string(&in.ConfigMapName, &out.ConfigMapName, s); err != nil {
+	if err := v1.Convert_string_To_Pointer_string(&in.DiskIOModelConfig, &out.DiskIOModelConfig, s); err != nil {
 		return err
 	}
-	if err := v1.Convert_string_To_Pointer_string(&in.ConfigMapNamespace, &out.ConfigMapNamespace, s); err != nil {
+	if err := v1.Convert_string_To_Pointer_string(&in.DiskIOModelConfigNS, &out.DiskIOModelConfigNS, s); err != nil {
 		return err
 	}
+	out.NSWhiteList = *(*[]string)(unsafe.Pointer(&in.NSWhiteList))
 	return nil
 }
 

@@ -59,11 +59,11 @@ func ValidateDiskIOArgs(path *field.Path, args *config.DiskIOArgs) error {
 		allErrs = append(allErrs, err)
 	}
 	configmapNamePath := path.Child("configMapName")
-	if err := validateDiskIOConfigMapName(args.ConfigMapName, configmapNamePath); err != nil {
+	if err := validateDiskIOConfigMapName(args.DiskIOModelConfig, configmapNamePath); err != nil {
 		allErrs = append(allErrs, err)
 	}
 	configmapNamespacePath := path.Child("configMapNamespace")
-	if err := validateDiskIOConfigMapNamespace(args.ConfigMapName, configmapNamespacePath); err != nil {
+	if err := validateDiskIOConfigMapNamespace(args.DiskIOModelConfigNS, configmapNamespacePath); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
