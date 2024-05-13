@@ -274,7 +274,8 @@ type SySchedArgs struct {
 type DiskIOArgs struct {
 	metav1.TypeMeta `json:",inline"`
 
-	ScoreStrategy      *string `json:"scoreStrategy,omitempty"`
-	ConfigMapName      *string `json:"configMapName,omitempty"`
-	ConfigMapNamespace *string `json:"configMapNamespace,omitempty"`
+	ScoreStrategy       *string  `json:"scoreStrategy,omitempty"`
+	DiskIOModelConfig   *string  `json:"diskIOModelConfig,omitempty"`
+	DiskIOModelConfigNS *string  `json:"diskIOModelConfigNS,omitempty"`
+	NSWhiteList         []string `json:"nsWhiteList,omitempty"`
 }

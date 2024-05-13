@@ -71,15 +71,20 @@ func (in *DiskIOArgs) DeepCopyInto(out *DiskIOArgs) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.ConfigMapName != nil {
-		in, out := &in.ConfigMapName, &out.ConfigMapName
+	if in.DiskIOModelConfig != nil {
+		in, out := &in.DiskIOModelConfig, &out.DiskIOModelConfig
 		*out = new(string)
 		**out = **in
 	}
-	if in.ConfigMapNamespace != nil {
-		in, out := &in.ConfigMapNamespace, &out.ConfigMapNamespace
+	if in.DiskIOModelConfigNS != nil {
+		in, out := &in.DiskIOModelConfigNS, &out.DiskIOModelConfigNS
 		*out = new(string)
 		**out = **in
+	}
+	if in.NSWhiteList != nil {
+		in, out := &in.NSWhiteList, &out.NSWhiteList
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	return
 }

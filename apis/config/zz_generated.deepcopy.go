@@ -56,6 +56,11 @@ func (in *CoschedulingArgs) DeepCopyObject() runtime.Object {
 func (in *DiskIOArgs) DeepCopyInto(out *DiskIOArgs) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
+	if in.NSWhiteList != nil {
+		in, out := &in.NSWhiteList, &out.NSWhiteList
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
