@@ -4,13 +4,12 @@ import (
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
 
 type Handle interface {
 	Name() string
-	Run(ExtendedCache, informers.SharedInformerFactory, kubernetes.Interface) error
+	Run(ExtendedCache, kubernetes.Interface) error
 }
 
 type CacheHandle interface {
