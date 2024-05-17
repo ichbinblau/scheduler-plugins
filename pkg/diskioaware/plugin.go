@@ -2,14 +2,12 @@ package diskioaware
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	externalinformer "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"sigs.k8s.io/scheduler-plugins/apis/config"
@@ -31,7 +29,6 @@ type DiskIO struct {
 const (
 	Name           = "DiskIO"
 	stateKeyPrefix = "DiskIO-"
-	diskVendorKey  = "diskVendors"
 	maxRetries     = 3
 	workers        = 2
 	baseModelDir   = "/tmp"
@@ -49,25 +46,6 @@ type stateData struct {
 
 func (d *stateData) Clone() framework.StateData {
 	return d
-}
-
-func loadModels(config *config.DiskIOArgs, cmLister corelisters.ConfigMapLister) (*normalizer.NormalizerManager, error) {
-	name, ns := config.DiskIOModelConfig, config.DiskIOModelConfigNS
-	cm, err := cmLister.ConfigMaps(name).Get(ns)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get configmap %s/%s: %v", ns, name, err)
-	}
-	data, ok := cm.Data[diskVendorKey]
-	if !ok {
-		return nil, fmt.Errorf("failed to load disk vendor data %v: %v", cm.Data, err)
-	}
-	pls := &normalizer.PlList{}
-	if err := json.Unmarshal([]byte(data), pls); err != nil {
-		return nil, fmt.Errorf("failed to deserialize configmap %s/%s: %v", ns, name, err)
-	}
-	nm := normalizer.NewNormalizerManager(baseModelDir, maxRetries)
-	go nm.LoadPlugins(*pls, workers)
-	return nm, nil
 }
 
 // New initializes a new plugin and returns it.
@@ -88,11 +66,9 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 
 	// load disk vendor normalize functions
 	// watch configmap with version
-	nm, err := loadModels(args, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
-	if err != nil {
-		return nil, err
-	}
-	d.nm = nm
+	d.nm = normalizer.NewNormalizerManager(baseModelDir, maxRetries)
+	d.nm.Run(ctx, args, workers, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
+
 	// initialize scorer
 	scorer, err := getScorer(args.ScoreStrategy)
 	if err != nil {

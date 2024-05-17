@@ -1,19 +1,32 @@
 package normalizer
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/scheduler-plugins/apis/config"
+)
+
+const (
+	diskVendorKey  = "diskModels.properties"
+	resyncDuration = 30 * time.Second
 )
 
 type PlList []PlConfig
 
 type PlConfig struct {
-	Vendor string `json:"vendor"`
-	Model  string `json:"model"`
-	Source string `json:"source"`
+	Vendor   string `json:"vendor"`
+	Model    string `json:"model"`
+	Source   string `json:"source"`
+	SkipTLS  bool   `json:"skipTLS"`
+	CertPath string `json:"certPath"`
 }
 
 type NormalizerManager struct {
@@ -29,8 +42,31 @@ func NewNormalizerManager(base string, m int) *NormalizerManager {
 	}
 }
 
+func (pm *NormalizerManager) Run(ctx context.Context, config *config.DiskIOArgs, num int, cmLister corelisters.ConfigMapLister) {
+	name, ns := config.DiskIOModelConfig, config.DiskIOModelConfigNS
+	var periodJob = func(ctx context.Context) {
+		cm, err := cmLister.ConfigMaps(name).Get(ns)
+		if err != nil {
+			klog.Errorf("failed to get configmap %s/%s: %v", ns, name, err)
+		}
+
+		data, ok := cm.Data[diskVendorKey]
+		if !ok {
+			klog.Errorf("failed to load disk vendor data %v: %v", cm.Data, err)
+		}
+		pls := &PlList{}
+		if err := json.Unmarshal([]byte(data), pls); err != nil {
+			klog.Errorf("failed to deserialize configmap %s/%s: %v", ns, name, err)
+		}
+
+		pm.LoadPlugins(*pls, num)
+	}
+	go wait.UntilWithContext(ctx, periodJob, resyncDuration)
+}
+
 // LoadPlugin implements the interface method
 func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
+	// todo: cancel with context
 	// load plugins
 	if len(l) == 0 {
 		return errors.New("plugin list cannot be empty")
@@ -47,6 +83,8 @@ func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
 		go func() {
 			defer wg.Done()
 			for pl := range pls {
+				// use Vendor+Model as key,
+				key := fmt.Sprintf("%s-%s", pl.Vendor, pl.Model)
 				if !isValidURL(pl.Source) {
 					klog.Infof("Invalid url: %s for %s\n", pl.Source, pl.Model)
 				}
@@ -54,14 +92,18 @@ func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
 				if err != nil {
 					klog.Infof("Failed to load %v: %v\n", pl.Source, err)
 				}
-				// use Vendor+Model as key, normalizer functions as value
-				pm.store.Set(fmt.Sprintf("%s-%s", pl.Vendor, pl.Model), norm)
+				// normalizer functions as value
+				pm.store.Set(key, norm)
 			}
 		}()
 	}
 
-	// enqueue plugins to load
+	// enqueue not existing plugins to load
 	for _, p := range l {
+		key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
+		if pm.store.Contains(key) {
+			continue
+		}
 		pls <- p
 	}
 
