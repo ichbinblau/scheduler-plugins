@@ -3,6 +3,7 @@ package resource
 import (
 	"fmt"
 
+	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -13,32 +14,28 @@ type Handle interface {
 }
 
 type CacheHandle interface {
-	// AddCacheNodeInfo(string, ioiv1.ResourceConfigSpec) error // Devices
-	// InitNodeStatus(string, ioiv1.ResourceConfigSpec) // skip
+	AddCacheNodeInfo(string, map[string]v1alpha1.DiskDevice)
 	DeleteCacheNodeInfo(string) error
-	// UpdateCacheNodeStatus(string, *ioiv1.NodeIOStatusStatus) error
-	CriticalPod(annotations map[string]string) bool // GA or BE pod
-	// GetRequestByAnnotation(*v1.Pod, string, bool) (map[string]*aggregator.IOResourceRequest, interface{}, error) // skip
+	UpdateCacheNodeStatus(string, v1alpha1.NodeDiskIOStatsStatus) error
+	IsGuaranteedPod(annotations map[string]string) bool
 	NodeRegistered(string) bool
-	// AddPod(*v1.Pod, string, interface{}, kubernetes.Interface) ([]*aggregator.IOResourceRequest, bool, error) // input pod request interface
-	RemovePod(*v1.Pod, string, kubernetes.Interface) error
-	AdmitPod(*v1.Pod, string) (interface{}, error)               // change interface to struct
-	CanAdmitPod(string, interface{}) (bool, interface{}, error)  // input pod request interface, output node's resource status interface
-	NodePressureRatio(interface{}, interface{}) (float64, error) // to be removed
+	AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBandwidth) error
+	RemovePod(*v1.Pod, string) error
+	// AdmitPod(*v1.Pod, string) (v1alpha1.IOBandwidth, error)
+	CanAdmitPod(string, v1alpha1.IOBandwidth) (bool, error)
+	NodePressureRatio(string, v1alpha1.IOBandwidth) (float64, error)
+	GetDiskNormalizeModel(string) (string, error)
 	PrintCacheInfo()
-	// NodeHasIoiLabel(*v1.Node) bool
-	// InitBENum(string, ioiv1.ResourceConfigSpec)
-	// UpdatePVC(*v1.PersistentVolumeClaim, string, string, int64, bool) error
 }
 
 type HandleBase struct {
 	EC ExtendedCache
 }
 
-func (h *HandleBase) RemovePod(pod *v1.Pod, nodeName string, client kubernetes.Interface) error {
+func (h *HandleBase) RemovePod(pod *v1.Pod, nodeName string) error {
 	r := h.EC.GetExtendedResource(nodeName)
 	if r != nil {
-		err := r.RemovePod(pod, client)
+		err := r.RemovePod(pod)
 		if err != nil {
 			return err
 		}
@@ -47,24 +44,23 @@ func (h *HandleBase) RemovePod(pod *v1.Pod, nodeName string, client kubernetes.I
 	return nil
 }
 
-// todo
-func (h *HandleBase) AddPod(pod *v1.Pod, nodeName string, request interface{}, client kubernetes.Interface) ([]struct{}, bool, error) {
+func (h *HandleBase) AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBandwidth) error {
 	r := h.EC.GetExtendedResource(nodeName)
 	if r != nil {
-		return r.AddPod(pod, request, client)
+		return r.AddPod(pod, request)
 	}
-	return nil, true, fmt.Errorf("cannot get extended resource: %v", nodeName)
+	return fmt.Errorf("cannot get extended resource: %v", nodeName)
 }
 
-func (h *HandleBase) AdmitPod(pod *v1.Pod, nodeName string) (interface{}, error) {
-	r := h.EC.GetExtendedResource(nodeName)
-	h.EC.PrintCacheInfo()
-	if r != nil {
-		return r.AdmitPod(pod)
-	}
+// func (h *HandleBase) AdmitPod(pod *v1.Pod, nodeName string) (v1alpha1.IOBandwidth, error) {
+// 	r := h.EC.GetExtendedResource(nodeName)
+// 	h.EC.PrintCacheInfo()
+// 	if r != nil {
+// 		return r.AdmitPod(pod)
+// 	}
 
-	return nil, fmt.Errorf("failed to get the extended resource on node: %s", nodeName)
-}
+// 	return v1alpha1.IOBandwidth{}, fmt.Errorf("failed to get the extended resource on node: %s", nodeName)
+// }
 
 func (h *HandleBase) PrintCacheInfo() {
 	h.EC.PrintCacheInfo()

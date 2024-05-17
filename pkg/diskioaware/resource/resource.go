@@ -1,18 +1,16 @@
 package resource
 
 import (
+	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // ExtendedResource specifies extended resources's aggregation methods
 // It is inteneded to be triggered by Pod/Node events
 type ExtendedResource interface {
 	Name() string
-	// todo
-	AddPod(pod *v1.Pod, request interface{}, client kubernetes.Interface) ([]struct{}, bool, error) // change interface to struct
-	RemovePod(pod *v1.Pod, client kubernetes.Interface) error
-	Clone() ExtendedResource
-	AdmitPod(pod *v1.Pod) (interface{}, error) // return pod requested resource and error msg
+	AddPod(pod *v1.Pod, request v1alpha1.IOBandwidth) error
+	RemovePod(pod *v1.Pod) error
+	// AdmitPod(pod *v1.Pod) (v1alpha1.IOBandwidth, error)
 	PrintInfo()
 }

@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
+	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/utils"
 )
 
 var IoiContext *ResourceIOContext
@@ -21,19 +22,17 @@ type StorageInfo struct {
 	NodeName         string
 }
 
-// type syncContext struct {
-// 	spec *v1.NodeIOStatusSpec
-// 	pod  *corev1.Pod
-// 	req  *pb.PodRequest
-// }
+type SyncContext struct {
+	Node string
+}
 
 type ResourceIOContext struct {
-	Client         kubernetes.Interface
-	VClient        versioned.Interface
-	Reservedpod    map[string][]string // nodename -> PodList
-	NsWhiteList    []string
-	queue          workqueue.RateLimitingInterface
-	lastUpdatedGen map[string]int64
+	VClient     versioned.Interface
+	Reservedpod map[string][]string             // nodename -> PodList
+	PodRequests map[string]v1alpha1.IOBandwidth // poduid -> bw
+	NsWhiteList []string
+	queue       workqueue.RateLimitingInterface
+	// lastUpdatedGen map[string]int64
 	sync.Mutex
 }
 
@@ -46,12 +45,12 @@ func NewContext(rl workqueue.RateLimiter, wl []string, h framework.Handle) (*Res
 		return nil, err
 	}
 	return &ResourceIOContext{
-		Reservedpod:    make(map[string][]string),
-		NsWhiteList:    wl,
-		VClient:        c,
-		Client:         h.ClientSet(),
-		queue:          queue,
-		lastUpdatedGen: make(map[string]int64),
+		Reservedpod: make(map[string][]string),
+		PodRequests: make(map[string]v1alpha1.IOBandwidth),
+		NsWhiteList: wl,
+		VClient:     c,
+		queue:       queue,
+		// lastUpdatedGen: make(map[string]int64),
 	}, nil
 }
 
@@ -65,9 +64,12 @@ func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
 			defer c.queue.Done(obj)
 
 			switch obj := obj.(type) {
-			// case *syncContext: // update Reserved Pods
-			// todo: update reserved pods
-			// return c.updateContext(ctx, obj.spec, obj.pod, obj.req)
+			case *SyncContext: // update Reserved Pods
+				pl, ok := c.Reservedpod[obj.Node]
+				if !ok {
+					return fmt.Errorf("node %v doesn't exist in reserved pod", obj.Node)
+				}
+				return utils.UpdateNodeIOStatus(c.VClient, obj.Node, pl)
 			default:
 				klog.Warningf("unexpected work item %#v", obj)
 			}
@@ -94,87 +96,31 @@ func (c *ResourceIOContext) GetReservedPods(node string) ([]string, error) {
 	return nil, fmt.Errorf("node %v doesn't exist in reserved pod", node)
 }
 
-// func (c *ResourceIOContext) GetReservedPodsWithNameNS(node string) (*v1.NodeIOStatusSpec, error) {
-// 	if v, ok := c.Reservedpod[node]; ok {
-// 		pods := map[string]v1.PodRequest{}
-// 		for uid, pr := range v.PodList {
-// 			pods[uid] = v1.PodRequest{
-// 				Name:      pr.PodName,
-// 				Namespace: pr.PodNamespace,
-// 			}
-// 		}
-
-// 		return &v1.NodeIOStatusSpec{
-// 			NodeName:     node,
-// 			Generation:   v.Generation,
-// 			ReservedPods: pods,
-// 		}, nil
-// 	}
-// 	return nil, fmt.Errorf("node %v doesn't exist in reserved pod", node)
-// }
+func (c *ResourceIOContext) GetPodRequest(pod string) (v1alpha1.IOBandwidth, error) {
+	if v, ok := c.PodRequests[pod]; ok {
+		return v, nil
+	}
+	return v1alpha1.IOBandwidth{}, fmt.Errorf("node %v doesn't exist in podRequests", pod)
+}
 
 func (c *ResourceIOContext) SetReservedPods(node string, pl []string) {
 	c.Reservedpod[node] = pl
-	c.lastUpdatedGen[node] = -1
 }
 
-// func (c *ResourceIOContext) updateContext(ctx context.Context, spec *v1.NodeIOStatusSpec, p *corev1.Pod, req *pb.PodRequest) error {
-// 	if spec == nil || len(spec.NodeName) == 0 {
-// 		klog.Error("Invalid NodeIOStatusSpec, ignore it")
-// 		return nil
-// 	}
-// 	gen, ok := c.lastUpdatedGen[spec.NodeName]
-// 	if !ok {
-// 		gen = -1
-// 	}
-// 	c.Lock()
-// 	defer c.Unlock()
-// 	if spec.Generation <= gen {
-// 		klog.V(utils.DBG).Infof("The Spec generation is small than the latest update, skip it. ")
-// 		return nil
-// 	}
-
-// 	if req != nil {
-// 		// add disk allocation to pod annotation
-// 		reqBW, err := common.PodRequest2String(req)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		err = common.AddOrUpdateAnnoOnPod(c.Client, p, map[string]string{
-// 			utils.AllocatedIOAnno: reqBW,
-// 		})
-// 		if err != nil {
-// 			return fmt.Errorf("AddOrUpdateAnnoOnPod fails: %v", err)
-
-// 		}
-// 	} else {
-// 		// delete pod annotation
-// 		err := common.DeleteAnnoOnPod(c.Client, p, utils.AllocatedIOAnno)
-// 		if err != nil && !kubeerr.IsNotFound(err) {
-// 			return fmt.Errorf("DeleteAnnoOnPod fails: %v", err)
-// 		}
-// 	}
-// 	if err := common.UpdateNodeIOStatusSpec(c.VClient, spec.NodeName, spec); err != nil {
-// 		return err
-// 	}
-// 	c.lastUpdatedGen[spec.NodeName] = spec.Generation
-// 	return nil
-// }
-
-// func (c *ResourceIOContext) UpdateReservedPods(node string, pod *corev1.Pod, req *pb.PodRequest) {
-// 	reservedPod, err := c.GetReservedPodsWithNameNS(node)
-// 	if err != nil {
-// 		klog.Errorf("reserved pod period update reserved pod err: %v", err)
-// 	}
-// 	c.queue.Add(&syncContext{
-// 		spec: reservedPod,
-// 		pod:  pod,
-// 		req:  req,
-// 	})
-// }
+func (c *ResourceIOContext) SetPodRequests(podid string, req v1alpha1.IOBandwidth) {
+	c.PodRequests[podid] = v1alpha1.IOBandwidth{
+		Read:  req.Read.DeepCopy(),
+		Write: req.Write.DeepCopy(),
+		Total: req.Total.DeepCopy(),
+	}
+}
 
 func (c *ResourceIOContext) RemoveNode(node string) {
 	delete(c.Reservedpod, node)
+}
+
+func (c *ResourceIOContext) RemovePodRequest(podid string) {
+	delete(c.PodRequests, podid)
 }
 
 func (c *ResourceIOContext) InNamespaceWhiteList(ns string) bool {
@@ -186,37 +132,36 @@ func (c *ResourceIOContext) InNamespaceWhiteList(ns string) bool {
 	return false
 }
 
-func (c *ResourceIOContext) AddPod(ctx context.Context, reqlist []string, pod *corev1.Pod, nodeName string) error {
+func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1.IOBandwidth) error {
 	c.Lock()
 	defer c.Unlock()
 
-	// todo: initialize workqueue to send reserve request
-	// new pod: pod 1, exising pod: pod0
-	// [pod0-uid, pod1-uid]
-	// update CR
-
-	// _, err := c.GetReservedPods(nodeName)
-	// if err != nil {
-	// 	return fmt.Errorf("get reserved pods error: %v", err)
-	// }
-	// podreq.Generation += 1
-	// podreq.PodList[string(pod.UID)] = reqlist
-	// c.SetReservedPods(nodeName, podreq)
-	// todo: update reserved pods
-	// c.UpdateReservedPods(nodeName, pod, reqlist)
+	pl, err := c.GetReservedPods(nodeName)
+	if err != nil {
+		return fmt.Errorf("get reserved pods error: %v", err)
+	}
+	pl = append(pl, fmt.Sprintf("%s-%s", pod.Name, pod.UID))
+	c.SetPodRequests(string(pod.UID), bw)
+	c.SetReservedPods(nodeName, pl)
+	c.queue.Add(&SyncContext{Node: nodeName})
 	return nil
 }
 
-func (c *ResourceIOContext) RemovePod(ctx context.Context, pod *corev1.Pod, nodeName string) error {
+func (c *ResourceIOContext) RemovePod(pod *corev1.Pod, nodeName string) error {
 	c.Lock()
 	defer c.Unlock()
-	// v, err := c.GetReservedPods(pod.Spec.NodeName)
-	// if err != nil {
-	// 	return fmt.Errorf("get reserved pods error: %v", err)
-	// }
-	// v.Generation += 1
-	// delete(v.PodList, string(pod.UID))
-	// todo: update reserved pods
-	// c.UpdateReservedPods(nodeName, pod, nil)
+	v, err := c.GetReservedPods(pod.Spec.NodeName)
+	if err != nil {
+		return fmt.Errorf("get reserved pods error: %v", err)
+	}
+	for i, p := range v {
+		if p == fmt.Sprintf("%s-%s", pod.Name, pod.UID) {
+			v = append(v[:i], v[i+1:]...)
+			break
+		}
+	}
+	c.RemovePodRequest(string(pod.UID))
+	c.SetReservedPods(nodeName, v)
+	c.queue.Add(&SyncContext{Node: nodeName})
 	return nil
 }
