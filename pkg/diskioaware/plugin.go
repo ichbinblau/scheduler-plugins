@@ -2,13 +2,18 @@ package diskioaware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	externalinformer "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/apis/config/validation"
@@ -16,12 +21,14 @@ import (
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/diskio"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/normalizer"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
+	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/utils"
 )
 
 type DiskIO struct {
-	rh     resource.Handle
-	scorer Scorer
-	nm     *normalizer.NormalizerManager
+	rh         resource.Handle
+	scorer     Scorer
+	nm         *normalizer.NormalizerManager
+	nodeLister corelisters.NodeLister
 	// client        versioned.Interface
 	// sharedFactory externalversions.SharedInformerFactory
 }
@@ -39,9 +46,8 @@ var _ = framework.ScorePlugin(&DiskIO{})
 var _ = framework.ReservePlugin(&DiskIO{})
 
 type stateData struct {
-	request           interface{}
-	nodeResourceState interface{} // change name
-	nodeSupportIOI    bool
+	request        v1alpha1.IOBandwidth
+	nodeSupportIOI bool
 }
 
 func (d *stateData) Clone() framework.StateData {
@@ -51,7 +57,8 @@ func (d *stateData) Clone() framework.StateData {
 // New initializes a new plugin and returns it.
 func New(configuration runtime.Object, handle framework.Handle) (framework.Plugin, error) {
 	d := &DiskIO{
-		rh: diskio.New(),
+		rh:         diskio.New(),
+		nodeLister: handle.SharedInformerFactory().Core().V1().Nodes().Lister(),
 	}
 	ctx := context.Background()
 	args, ok := configuration.(*config.DiskIOArgs)
@@ -92,10 +99,10 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	// initialize event handling
 	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
 	nsLister := handle.SharedInformerFactory().Core().V1().Namespaces().Lister()
-	eh := resource.NewIOEventHandler(d.rh, handle, podLister, nsLister)
+	eh := resource.NewIOEventHandler(d.rh, handle, podLister, nsLister, d.nm)
 
 	podInformer := handle.SharedInformerFactory().Core().V1().Pods().Informer()
-	iof := externalinformer.NewSharedInformerFactory(resource.IoiContext.VClient, 0)
+	iof := externalinformer.NewSharedInformerFactory(resource.IoiContext.VClient, time.Minute)
 	err = eh.BuildEvtHandler(ctx, podInformer, iof)
 	if err != nil {
 		return nil, err
@@ -111,13 +118,67 @@ func (ps *DiskIO) Name() string {
 // Checks if a node has sufficient resources, such as cpu, memory, gpu, opaque int resources etc to run a pod.
 // It returns a list of insufficient resources, if empty, then the node has all the resources requested by the pod.
 func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
-
+	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
+		return framework.NewStatus(framework.Success)
+	}
+	node := nodeInfo.Node()
+	nodeName := node.Name
+	exist := ps.rh.(resource.CacheHandle).NodeRegistered(nodeName)
+	if !exist {
+		if ps.rh.(resource.CacheHandle).IsGuaranteedPod(pod.Annotations) {
+			return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("node %v without disk io aware support cannot schedule disk io aware workload", nodeName))
+		} else {
+			state.Write(framework.StateKey(stateKeyPrefix+nodeName), &stateData{nodeSupportIOI: false})
+			return framework.NewStatus(framework.Success)
+		}
+	}
+	model, err := ps.rh.(resource.CacheHandle).GetDiskNormalizeModel(nodeName)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	normalizeFunc, err := ps.nm.GetNormalizer(model)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	key := pod.Annotations[utils.DiskIOAnnotation]
+	reqStr, err := normalizeFunc(key)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	request, err := utils.RequestStrToQuantity(reqStr)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	ok, err := ps.rh.(resource.CacheHandle).CanAdmitPod(nodeName, request)
+	if !ok {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	state.Write(framework.StateKey(stateKeyPrefix+nodeName), &stateData{request: request, nodeSupportIOI: true})
 	return framework.NewStatus(framework.Success)
 }
 
 // Score invoked at the score extension point.
 func (ps *DiskIO) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
-	return 100, framework.NewStatus(framework.Success)
+	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
+		return framework.MaxNodeScore, framework.NewStatus(framework.Success)
+	}
+	score := int64(0)
+	sd, err := getStateData(state, stateKeyPrefix+nodeName)
+	if err != nil {
+		return framework.MinNodeScore, framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	// BE pod schedule to node without IOI support
+	if !sd.nodeSupportIOI {
+		score = framework.MaxNodeScore
+	} else {
+		s, err := ps.scorer.Score(nodeName, sd, ps.rh)
+		if err != nil {
+			return framework.MinNodeScore, framework.NewStatus(framework.Unschedulable, err.Error())
+		} else {
+			score = s
+		}
+	}
+	return score, framework.NewStatus(framework.Success)
 }
 
 // ScoreExtensions of the Score plugin.
@@ -127,10 +188,43 @@ func (ps *DiskIO) ScoreExtensions() framework.ScoreExtensions {
 
 // Reserve is the functions invoked by the framework at "reserve" extension point.
 func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
+	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
+		return framework.NewStatus(framework.Success, "")
+	}
+	sd, err := getStateData(state, stateKeyPrefix+nodeName)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	if !sd.nodeSupportIOI {
+		return framework.NewStatus(framework.Success, "")
+	}
+	err = ps.rh.(resource.CacheHandle).AddPod(pod, nodeName, sd.request)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
+	ps.rh.(resource.CacheHandle).PrintCacheInfo()
+	request := sd.request
+	clearStateData(state, ps.nodeLister)
+	err = resource.IoiContext.AddPod(pod, nodeName, request)
+	if err != nil {
+		return framework.NewStatus(framework.Unschedulable, err.Error())
+	}
 	return framework.NewStatus(framework.Success, "")
 }
 
 func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
+	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
+		return
+	}
+	err := ps.rh.(resource.CacheHandle).RemovePod(pod, nodeName)
+	if err != nil {
+		klog.Error("Unreserve pod error: ", err.Error())
+	}
+	err = resource.IoiContext.RemovePod(pod, nodeName)
+	if err != nil {
+		klog.Errorf("fail to remove pod in ReservedPod: %v", err)
+	}
+
 }
 
 // EventsToRegister returns the possible events that may make a Pod
@@ -150,4 +244,32 @@ func (ps *DiskIO) EventsToRegister() []framework.ClusterEvent {
 		{Resource: framework.GVK(fmt.Sprintf("nodediskiostatses.v1alpha1.%v", scheduling.GroupName)), ActionType: framework.Update},
 	}
 	return ce
+}
+
+// read by reserve and score
+func getStateData(cs *framework.CycleState, key string) (*stateData, error) {
+	state, err := cs.Read(framework.StateKey(key))
+	if err != nil {
+		return nil, err
+	}
+	s, ok := state.(*stateData)
+	if !ok {
+		return nil, errors.New("unable to convert state into stateData")
+	}
+	return s, nil
+}
+
+func clearStateData(state *framework.CycleState, nodeLister corelisters.NodeLister) {
+	// delete all cycle states for all nodes
+	nodes, err := nodeLister.List(labels.Everything())
+	if err != nil {
+		klog.Errorf("Get nodes error:", err)
+	}
+	for _, node := range nodes {
+		deleteStateData(state, stateKeyPrefix+node.Name)
+	}
+}
+
+func deleteStateData(cs *framework.CycleState, key string) {
+	cs.Delete(framework.StateKey(key))
 }

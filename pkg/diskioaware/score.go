@@ -8,7 +8,7 @@ import (
 )
 
 type Scorer interface {
-	Score(*stateData, resource.Handle) (int64, error)
+	Score(string, *stateData, resource.Handle) (int64, error)
 }
 
 func getScorer(scoreStrategy string) (Scorer, error) {
@@ -25,11 +25,11 @@ func getScorer(scoreStrategy string) (Scorer, error) {
 type MostAllocatedScorer struct{}
 
 // todo: change algorithm
-func (scorer *MostAllocatedScorer) Score(state *stateData, rh resource.Handle) (int64, error) {
+func (scorer *MostAllocatedScorer) Score(node string, state *stateData, rh resource.Handle) (int64, error) {
 	if !state.nodeSupportIOI {
 		return framework.MaxNodeScore, nil
 	}
-	ratio, err := rh.(resource.CacheHandle).NodePressureRatio(state.request, state.nodeResourceState)
+	ratio, err := rh.(resource.CacheHandle).NodePressureRatio(node, state.request)
 	if err != nil {
 		return 0, err
 	}
@@ -38,11 +38,11 @@ func (scorer *MostAllocatedScorer) Score(state *stateData, rh resource.Handle) (
 
 type LeastAllocatedScorer struct{}
 
-func (scorer *LeastAllocatedScorer) Score(state *stateData, rh resource.Handle) (int64, error) {
+func (scorer *LeastAllocatedScorer) Score(node string, state *stateData, rh resource.Handle) (int64, error) {
 	if !state.nodeSupportIOI {
 		return framework.MaxNodeScore, nil
 	}
-	ratio, err := rh.(resource.CacheHandle).NodePressureRatio(state.request, state.nodeResourceState)
+	ratio, err := rh.(resource.CacheHandle).NodePressureRatio(node, state.request)
 	if err != nil {
 		return 0, err
 	}
