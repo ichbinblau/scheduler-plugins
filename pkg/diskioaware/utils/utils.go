@@ -7,34 +7,15 @@ import (
 	"hash/fnv"
 	"reflect"
 	"sort"
-	"time"
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned"
+	common "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/iodriver"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	clientretry "k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	hashutil "k8s.io/kubernetes/pkg/util/hash"
 )
-
-const (
-	EmptyDir         string = "emptyDir"
-	Others           string = "others"
-	DiskIOAnnotation string = "diskio.intel.com/io-bandwidth"
-
-	NodeDiskDeviceCRSuffix string = "-nodediskdevice"
-	NodeDiskIOInfoCRSuffix string = "-nodediskiostats"
-	NodeIOStatusCR         string = "NodeDiskIOStats"
-	APIVersion             string = "ioi.intel.com/v1"
-	CRNameSpace            string = "ioi-system"
-)
-
-var UpdateBackoff = wait.Backoff{
-	Steps:    3,
-	Duration: 100 * time.Millisecond, // 0.1s
-	Jitter:   1.0,
-}
 
 type IORequest struct {
 	Rbps      string `json:"rbps"`
@@ -60,7 +41,9 @@ func GetNodeIOStatus(client versioned.Interface, n string) (*v1alpha1.NodeDiskIO
 	if len(n) == 0 {
 		return nil, fmt.Errorf("node name cannot be empty")
 	}
-	obj, err := client.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).Get(context.Background(), n+NodeDiskIOInfoCRSuffix, v1.GetOptions{})
+	obj, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Get(context.Background(),
+		common.GetCRName(n, common.NodeDiskIOInfoCRSuffix),
+		v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -70,12 +53,12 @@ func GetNodeIOStatus(client versioned.Interface, n string) (*v1alpha1.NodeDiskIO
 func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) error {
 	nodeStatusInfo := &v1alpha1.NodeDiskIOStats{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: APIVersion,
-			Kind:       NodeIOStatusCR,
+			APIVersion: common.APIVersion,
+			Kind:       common.NodeIOStatusCR,
 		},
 		ObjectMeta: v1.ObjectMeta{
-			Namespace: CRNameSpace,
-			Name:      node + NodeDiskIOInfoCRSuffix,
+			Namespace: common.CRNameSpace,
+			Name:      common.GetCRName(node, common.NodeDiskIOInfoCRSuffix),
 		},
 		Spec: v1alpha1.NodeDiskIOStatsSpec{
 			NodeName:     node,
@@ -84,7 +67,7 @@ func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) er
 		Status: v1alpha1.NodeDiskIOStatsStatus{},
 	}
 
-	_, err := client.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).Create(context.TODO(), nodeStatusInfo, v1.CreateOptions{})
+	_, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Create(context.TODO(), nodeStatusInfo, v1.CreateOptions{})
 	if err != nil {
 		klog.Error("CreateNodeIOStatus fails: ", err)
 		return err
@@ -94,13 +77,13 @@ func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) er
 
 func UpdateNodeIOStatus(client versioned.Interface, node string, pl []string) error {
 
-	return clientretry.RetryOnConflict(UpdateBackoff, func() error {
+	return clientretry.RetryOnConflict(common.UpdateBackoff, func() error {
 		sts, err := GetNodeIOStatus(client, node)
 		if err != nil {
 			return err
 		}
 		sts.Spec.ReservedPods = pl
-		_, err = client.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).Update(context.TODO(), sts, v1.UpdateOptions{})
+		_, err = client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Update(context.TODO(), sts, v1.UpdateOptions{})
 		if err != nil {
 			klog.Error("UpdateNodeIOStatus fails: ", err)
 			return err

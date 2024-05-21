@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
+	common "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/iodriver"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
@@ -53,7 +54,7 @@ func (h *Handle) AddCacheNodeInfo(node string, disks map[string]v1alpha1.DiskDev
 				Total: info.Capacity.Total.DeepCopy(),
 			},
 		}
-		if nodeInfo.DefaultDevice == utils.EmptyDir {
+		if nodeInfo.DefaultDevice == string(common.EmptyDir) {
 			nodeInfo.DefaultDevice = disk
 		}
 	}
@@ -95,7 +96,7 @@ func (h *Handle) UpdateCacheNodeStatus(n string, nodeIoBw v1alpha1.NodeDiskIOSta
 }
 func (h *Handle) IsGuaranteedPod(annotations map[string]string) bool {
 	anno := utils.IORequest{}
-	if v, ok := annotations[utils.DiskIOAnnotation]; ok {
+	if v, ok := annotations[common.DiskIOAnnotation]; ok {
 		if err := json.Unmarshal([]byte(v), &anno); err != nil {
 			return false
 		}

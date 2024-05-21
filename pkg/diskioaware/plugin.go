@@ -8,6 +8,7 @@ import (
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	externalinformer "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions"
+	common "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/iodriver"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -125,6 +126,7 @@ func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *
 	nodeName := node.Name
 	exist := ps.rh.(resource.CacheHandle).NodeRegistered(nodeName)
 	if !exist {
+		// todo: IsIORequired
 		if ps.rh.(resource.CacheHandle).IsGuaranteedPod(pod.Annotations) {
 			return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("node %v without disk io aware support cannot schedule disk io aware workload", nodeName))
 		} else {
@@ -140,7 +142,7 @@ func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *
 	if err != nil {
 		return framework.NewStatus(framework.Unschedulable, err.Error())
 	}
-	key := pod.Annotations[utils.DiskIOAnnotation]
+	key := pod.Annotations[common.DiskIOAnnotation]
 	reqStr, err := normalizeFunc(key)
 	if err != nil {
 		return framework.NewStatus(framework.Unschedulable, err.Error())

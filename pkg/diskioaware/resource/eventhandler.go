@@ -7,6 +7,7 @@ import (
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned"
 	externalinformer "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions"
+	common "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/iodriver"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -123,7 +124,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 					klog.Errorf("get normalizer error: %v", err)
 					continue
 				}
-				key := pod.Annotations[utils.DiskIOAnnotation]
+				key := pod.Annotations[common.DiskIOAnnotation]
 				reqStr, err := normalizeFunc(key)
 				if err != nil {
 					klog.Errorf("normalize request error: %v", err)
@@ -153,6 +154,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 			klog.Errorf("create CR error: %v", err)
 		}
 	} else {
+		// todo: compare generation only
 		// CR exist, check pod list and update it
 		if utils.ComparePodList(sts.Spec.ReservedPods, podLists) && sts.Generation == *sts.Status.ObservedGeneration {
 			// update cache
