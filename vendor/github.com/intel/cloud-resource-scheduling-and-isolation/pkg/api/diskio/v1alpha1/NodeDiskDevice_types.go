@@ -41,8 +41,6 @@ type DiskDevice struct {
 	Model string `json:"model,omitempty"`
 	// Default or not
 	Type string `json:"type,omitempty"`
-	// Read/Write io bandwidth limit
-	Default IOBandwidth `json:"default,omitempty"`
 	// Profile result of io bandwidth capacity
 	Capacity IOBandwidth `json:"capacity,omitempty"`
 }
