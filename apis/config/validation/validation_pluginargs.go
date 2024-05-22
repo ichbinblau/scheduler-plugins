@@ -58,12 +58,8 @@ func ValidateDiskIOArgs(path *field.Path, args *config.DiskIOArgs) error {
 	if err := validateDiskIOScoreStrategy(args.ScoreStrategy, scoreStrategyPath); err != nil {
 		allErrs = append(allErrs, err)
 	}
-	configmapNamePath := path.Child("configMapName")
-	if err := validateDiskIOConfigMapName(args.DiskIOModelConfig, configmapNamePath); err != nil {
-		allErrs = append(allErrs, err)
-	}
-	configmapNamespacePath := path.Child("configMapNamespace")
-	if err := validateDiskIOConfigMapNamespace(args.DiskIOModelConfigNS, configmapNamespacePath); err != nil {
+	nswlPath := path.Child("nsWhiteList")
+	if err := validateDiskIOWhiteListNamespace(args.NSWhiteList, nswlPath); err != nil {
 		allErrs = append(allErrs, err)
 	}
 
@@ -77,18 +73,12 @@ func validateDiskIOScoreStrategy(scoreStrategy string, path *field.Path) *field.
 	return nil
 }
 
-func validateDiskIOConfigMapName(name string, path *field.Path) *field.Error {
-	errs := apimachineryvalidation.NameIsDNSSubdomain(string(name), false)
-	if len(errs) > 0 {
-		return field.Invalid(path, name, "invalid ConfigMap name")
-	}
-	return nil
-}
-
-func validateDiskIOConfigMapNamespace(ns string, path *field.Path) *field.Error {
-	errs := apimachineryvalidation.ValidateNamespaceName(string(ns), false)
-	if len(errs) > 0 {
-		return field.Invalid(path, ns, "invalid ConfigMap namespace")
+func validateDiskIOWhiteListNamespace(nsWhiteList []string, path *field.Path) *field.Error {
+	for _, ns := range nsWhiteList {
+		errs := apimachineryvalidation.ValidateNamespaceName(ns, false)
+		if len(errs) > 0 {
+			return field.Invalid(path, ns, "invalid ConfigMap namespace")
+		}
 	}
 	return nil
 }

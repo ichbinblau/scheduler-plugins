@@ -106,10 +106,6 @@ var (
 	// Defaults for DiskIO aware
 	// defaultDiskIOScoreStrategy is the default score strategy for disk io aware plugin
 	defaultDiskIOScoreStrategy string = "LeastAllocated"
-	// defaultDiskIOModelConfig is the default name of the ConfigMap which contains the urls to download normalization models
-	defaultDiskIOModelConfig string = "normalization-func"
-	// defaultDiskIOModelConfigNS is the default namespace of the ConfigMap which contains the urls to download normalization models
-	defaultDiskIOModelConfigNS string = "default"
 )
 
 // SetDefaults_CoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -263,14 +259,6 @@ func SetDefaults_SySchedArgs(obj *SySchedArgs) {
 func SetDefaults_DiskIOArgs(obj *DiskIOArgs) {
 	if obj.ScoreStrategy == nil {
 		obj.ScoreStrategy = &defaultDiskIOScoreStrategy
-	}
-
-	if obj.DiskIOModelConfig == nil {
-		obj.DiskIOModelConfig = &defaultDiskIOModelConfig
-	}
-
-	if obj.DiskIOModelConfigNS == nil {
-		obj.DiskIOModelConfigNS = &defaultDiskIOModelConfigNS
 	}
 
 	if obj.NSWhiteList == nil {
