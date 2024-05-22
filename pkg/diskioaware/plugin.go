@@ -35,7 +35,7 @@ type DiskIO struct {
 }
 
 const (
-	Name           = "DiskIO"
+	Name           = "DiskIOAware"
 	stateKeyPrefix = "DiskIO-"
 	maxRetries     = 3
 	workers        = 2
@@ -75,7 +75,7 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	// load disk vendor normalize functions
 	// watch configmap with version
 	d.nm = normalizer.NewNormalizerManager(baseModelDir, maxRetries)
-	d.nm.Run(ctx, args, workers, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
+	d.nm.Run(ctx, workers, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
 
 	// initialize scorer
 	scorer, err := getScorer(args.ScoreStrategy)
