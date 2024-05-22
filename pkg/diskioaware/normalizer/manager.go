@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/scheduler-plugins/apis/config"
 )
 
 const (
-	diskVendorKey  = "diskModels.properties"
-	resyncDuration = 30 * time.Second
+	diskModelConfig = "/etc/kubernetes/diskModels.properties"
+	resyncDuration  = 90 * time.Second
 )
 
 type PlList []PlConfig
@@ -42,23 +42,16 @@ func NewNormalizerManager(base string, m int) *NormalizerManager {
 	}
 }
 
-func (pm *NormalizerManager) Run(ctx context.Context, config *config.DiskIOArgs, num int, cmLister corelisters.ConfigMapLister) {
-	name, ns := config.DiskIOModelConfig, config.DiskIOModelConfigNS
+func (pm *NormalizerManager) Run(ctx context.Context, num int, cmLister corelisters.ConfigMapLister) {
 	var periodJob = func(ctx context.Context) {
-		cm, err := cmLister.ConfigMaps(name).Get(ns)
+		data, err := os.ReadFile(diskModelConfig)
 		if err != nil {
-			klog.Errorf("failed to get configmap %s/%s: %v", ns, name, err)
-		}
-
-		data, ok := cm.Data[diskVendorKey]
-		if !ok {
-			klog.Errorf("failed to load disk vendor data %v: %v", cm.Data, err)
+			klog.Errorf("failed to load disk model config: %v", err)
 		}
 		pls := &PlList{}
-		if err := json.Unmarshal([]byte(data), pls); err != nil {
-			klog.Errorf("failed to deserialize configmap %s/%s: %v", ns, name, err)
+		if err := json.Unmarshal(data, pls); err != nil {
+			klog.Errorf("failed to deserialize disk model config: %v", err)
 		}
-
 		pm.LoadPlugins(*pls, num)
 	}
 	go wait.UntilWithContext(ctx, periodJob, resyncDuration)
