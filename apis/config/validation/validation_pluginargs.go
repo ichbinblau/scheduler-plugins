@@ -54,7 +54,7 @@ func validateScoringStrategyType(scoringStrategy config.ScoringStrategyType, pat
 
 func ValidateDiskIOArgs(path *field.Path, args *config.DiskIOArgs) error {
 	var allErrs field.ErrorList
-	scoreStrategyPath := path.Child("scoringStrategy")
+	scoreStrategyPath := path.Child("scoreStrategy")
 	if err := validateDiskIOScoreStrategy(args.ScoreStrategy, scoreStrategyPath); err != nil {
 		allErrs = append(allErrs, err)
 	}
@@ -77,7 +77,7 @@ func validateDiskIOWhiteListNamespace(nsWhiteList []string, path *field.Path) *f
 	for _, ns := range nsWhiteList {
 		errs := apimachineryvalidation.ValidateNamespaceName(ns, false)
 		if len(errs) > 0 {
-			return field.Invalid(path, ns, "invalid ConfigMap namespace")
+			return field.Invalid(path, ns, "invalid namespace format")
 		}
 	}
 	return nil

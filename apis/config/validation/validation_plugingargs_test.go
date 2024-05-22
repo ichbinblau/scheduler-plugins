@@ -67,3 +67,53 @@ func TestValidateNodeResourceTopologyMatchArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDiskIOArgs(t *testing.T) {
+	testCases := []struct {
+		args        *config.DiskIOArgs
+		expectedErr error
+		description string
+	}{
+		{
+			description: "correct config",
+			args: &config.DiskIOArgs{
+				ScoreStrategy: string(config.LeastAllocated),
+				NSWhiteList:   []string{"ns1", "ns2"},
+			},
+		},
+		{
+			description: "incorrect config, wrong ScoreStrategy type",
+			args: &config.DiskIOArgs{
+				ScoreStrategy: "UnknownStrategy",
+				NSWhiteList:   nil,
+			},
+			expectedErr: fmt.Errorf("scoreStrategy: Invalid value"),
+		},
+		{
+			description: "incorrect config, wrong namespace format",
+			args: &config.DiskIOArgs{
+				ScoreStrategy: string(config.LeastAllocated),
+				NSWhiteList:   []string{"!!!!"},
+			},
+			expectedErr: fmt.Errorf("invalid namespace format"),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			err := ValidateDiskIOArgs(nil, testCase.args)
+			if testCase.expectedErr != nil {
+				if err == nil {
+					t.Errorf("expected err to equal %v not nil", testCase.expectedErr)
+				}
+
+				if !strings.Contains(err.Error(), testCase.expectedErr.Error()) {
+					t.Errorf("expected err to contain %s in error message: %s", testCase.expectedErr.Error(), err.Error())
+				}
+			}
+			if testCase.expectedErr == nil && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
