@@ -17,6 +17,8 @@ import (
 	hashutil "k8s.io/kubernetes/pkg/util/hash"
 )
 
+const DiskIOAnnotation = "diskio.intel.com/io-bandwidth"
+
 type IORequest struct {
 	Rbps      string `json:"rbps"`
 	Wbps      string `json:"wbps"`
@@ -34,14 +36,14 @@ func RequestStrToQuantity(reqStr string) (v1alpha1.IOBandwidth, error) {
 	return q, nil
 }
 
-func GetNodeIOStatus(client versioned.Interface, n string) (*v1alpha1.NodeDiskIOStats, error) {
+func GetNodeIOStatus(ctx context.Context, client versioned.Interface, n string) (*v1alpha1.NodeDiskIOStats, error) {
 	if client == nil {
 		return nil, fmt.Errorf("kubernetes configmap client cannot be nil")
 	}
 	if len(n) == 0 {
 		return nil, fmt.Errorf("node name cannot be empty")
 	}
-	obj, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Get(context.Background(),
+	obj, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Get(ctx,
 		common.GetCRName(n, common.NodeDiskIOInfoCRSuffix),
 		v1.GetOptions{})
 	if err != nil {
@@ -50,7 +52,7 @@ func GetNodeIOStatus(client versioned.Interface, n string) (*v1alpha1.NodeDiskIO
 	return obj, nil
 }
 
-func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) error {
+func CreateNodeIOStatus(ctx context.Context, client versioned.Interface, node string, pl []string) error {
 	nodeStatusInfo := &v1alpha1.NodeDiskIOStats{
 		TypeMeta: v1.TypeMeta{
 			APIVersion: common.APIVersion,
@@ -67,7 +69,7 @@ func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) er
 		Status: v1alpha1.NodeDiskIOStatsStatus{},
 	}
 
-	_, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Create(context.TODO(), nodeStatusInfo, v1.CreateOptions{})
+	_, err := client.DiskioV1alpha1().NodeDiskIOStatses(common.CRNameSpace).Create(ctx, nodeStatusInfo, v1.CreateOptions{})
 	if err != nil {
 		klog.Error("CreateNodeIOStatus fails: ", err)
 		return err
@@ -75,10 +77,10 @@ func CreateNodeIOStatus(client versioned.Interface, node string, pl []string) er
 	return nil
 }
 
-func UpdateNodeIOStatus(client versioned.Interface, node string, pl []string) error {
+func UpdateNodeIOStatus(ctx context.Context, client versioned.Interface, node string, pl []string) error {
 
 	return clientretry.RetryOnConflict(common.UpdateBackoff, func() error {
-		sts, err := GetNodeIOStatus(client, node)
+		sts, err := GetNodeIOStatus(ctx, client, node)
 		if err != nil {
 			return err
 		}
