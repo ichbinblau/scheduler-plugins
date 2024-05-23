@@ -17,11 +17,10 @@ type CacheHandle interface {
 	AddCacheNodeInfo(string, map[string]v1alpha1.DiskDevice)
 	DeleteCacheNodeInfo(string) error
 	UpdateCacheNodeStatus(string, v1alpha1.NodeDiskIOStatsStatus) error
-	IsGuaranteedPod(annotations map[string]string) bool
+	IsIORequired(annotations map[string]string) bool
 	NodeRegistered(string) bool
 	AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBandwidth) error
 	RemovePod(*v1.Pod, string) error
-	// AdmitPod(*v1.Pod, string) (v1alpha1.IOBandwidth, error)
 	CanAdmitPod(string, v1alpha1.IOBandwidth) (bool, error)
 	NodePressureRatio(string, v1alpha1.IOBandwidth) (float64, error)
 	GetDiskNormalizeModel(string) (string, error)
@@ -51,16 +50,6 @@ func (h *HandleBase) AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBan
 	}
 	return fmt.Errorf("cannot get extended resource: %v", nodeName)
 }
-
-// func (h *HandleBase) AdmitPod(pod *v1.Pod, nodeName string) (v1alpha1.IOBandwidth, error) {
-// 	r := h.EC.GetExtendedResource(nodeName)
-// 	h.EC.PrintCacheInfo()
-// 	if r != nil {
-// 		return r.AdmitPod(pod)
-// 	}
-
-// 	return v1alpha1.IOBandwidth{}, fmt.Errorf("failed to get the extended resource on node: %s", nodeName)
-// }
 
 func (h *HandleBase) PrintCacheInfo() {
 	h.EC.PrintCacheInfo()

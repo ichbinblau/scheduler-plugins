@@ -126,8 +126,7 @@ func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *
 	nodeName := node.Name
 	exist := ps.rh.(resource.CacheHandle).NodeRegistered(nodeName)
 	if !exist {
-		// todo: IsIORequired
-		if ps.rh.(resource.CacheHandle).IsGuaranteedPod(pod.Annotations) {
+		if ps.rh.(resource.CacheHandle).IsIORequired(pod.Annotations) {
 			return framework.NewStatus(framework.Unschedulable, fmt.Sprintf("node %v without disk io aware support cannot schedule disk io aware workload", nodeName))
 		} else {
 			state.Write(framework.StateKey(stateKeyPrefix+nodeName), &stateData{nodeSupportIOI: false})

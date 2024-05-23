@@ -1,7 +1,6 @@
 package diskio
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -71,10 +70,11 @@ func (h *Handle) DeleteCacheNodeInfo(nodeName string) error {
 	h.Lock()
 	defer h.Unlock()
 	h.EC.DeleteExtendedResource(nodeName)
+	h.EC.PrintCacheInfo()
 	return nil
 }
-func (h *Handle) UpdateCacheNodeStatus(n string, nodeIoBw v1alpha1.NodeDiskIOStatsStatus) error {
-	rs := h.EC.GetExtendedResource(n)
+func (h *Handle) UpdateCacheNodeStatus(nodeName string, nodeIoBw v1alpha1.NodeDiskIOStatsStatus) error {
+	rs := h.EC.GetExtendedResource(nodeName)
 	if rs == nil {
 		return fmt.Errorf("node not registered in cache")
 	}
@@ -82,8 +82,8 @@ func (h *Handle) UpdateCacheNodeStatus(n string, nodeIoBw v1alpha1.NodeDiskIOSta
 	if !ok {
 		return fmt.Errorf("incorrect resource cached")
 	}
-	h.Lock()
-	defer h.Unlock()
+	r.Lock()
+	defer r.Unlock()
 	for dev, bw := range nodeIoBw.AllocatableBandwidth {
 		r.info.DisksStatus[dev].Allocatable = v1alpha1.IOBandwidth{
 			Read:  bw.Read.DeepCopy(),
@@ -94,12 +94,8 @@ func (h *Handle) UpdateCacheNodeStatus(n string, nodeIoBw v1alpha1.NodeDiskIOSta
 	h.EC.PrintCacheInfo()
 	return nil
 }
-func (h *Handle) IsGuaranteedPod(annotations map[string]string) bool {
-	anno := utils.IORequest{}
-	if v, ok := annotations[common.DiskIOAnnotation]; ok {
-		if err := json.Unmarshal([]byte(v), &anno); err != nil {
-			return false
-		}
+func (h *Handle) IsIORequired(annotations map[string]string) bool {
+	if _, ok := annotations[utils.DiskIOAnnotation]; ok {
 		return true
 	}
 	return false
@@ -116,6 +112,8 @@ func (h *Handle) CanAdmitPod(nodeName string, req v1alpha1.IOBandwidth) (bool, e
 		klog.Error("incorrect resource cached")
 		return false, fmt.Errorf("incorrect resource cached")
 	}
+	r.Lock()
+	defer r.Unlock()
 	dev := r.info.DefaultDevice
 	if _, ok := r.info.DisksStatus[dev]; !ok {
 		return false, fmt.Errorf("emptydir disk %v not registered in cache", dev)
@@ -143,6 +141,8 @@ func (h *Handle) NodePressureRatio(node string, request v1alpha1.IOBandwidth) (f
 		klog.Error("incorrect resource cached")
 		return 0, fmt.Errorf("incorrect resource cached")
 	}
+	r.Lock()
+	defer r.Unlock()
 	dev := r.info.DefaultDevice
 	if _, ok := r.info.DisksStatus[dev]; !ok {
 		return 0, fmt.Errorf("emptydir disk %v not registered in cache", dev)

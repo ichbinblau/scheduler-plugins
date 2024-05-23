@@ -98,6 +98,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 	ps.cache.(CacheHandle).AddCacheNodeInfo(node, ndd.Spec.Devices)
 	// fill reserved pod
 	podLists := []string{}
+	ctx := context.Background()
 	namespaces, err := ps.nsLister.List(labels.Everything())
 	if err != nil {
 		klog.Errorf("get namespaces error: %v", err)
@@ -146,10 +147,10 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 	}
 	IoiContext.SetReservedPods(node, podLists)
 	// create or update CR
-	sts, err := utils.GetNodeIOStatus(ps.vClient, node)
+	sts, err := utils.GetNodeIOStatus(ctx, ps.vClient, node)
 	if err != nil {
 		// CR not exist, create one
-		err := utils.CreateNodeIOStatus(ps.vClient, node, podLists)
+		err := utils.CreateNodeIOStatus(ctx, ps.vClient, node, podLists)
 		if err != nil {
 			klog.Errorf("create CR error: %v", err)
 		}
@@ -164,7 +165,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 			}
 		} else {
 			// update CR
-			err := utils.UpdateNodeIOStatus(ps.vClient, node, podLists)
+			err := utils.UpdateNodeIOStatus(ctx, ps.vClient, node, podLists)
 			if err != nil {
 				klog.Errorf("update CR error: %v", err)
 			}

@@ -11,6 +11,5 @@ type ExtendedResource interface {
 	Name() string
 	AddPod(pod *v1.Pod, request v1alpha1.IOBandwidth) error
 	RemovePod(pod *v1.Pod) error
-	// AdmitPod(pod *v1.Pod) (v1alpha1.IOBandwidth, error)
 	PrintInfo()
 }

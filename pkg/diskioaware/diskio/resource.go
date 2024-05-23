@@ -45,6 +45,8 @@ func (ps *Resource) Name() string {
 }
 
 func (ps *Resource) AddPod(pod *v1.Pod, request v1alpha1.IOBandwidth) error {
+	ps.Lock()
+	defer ps.Unlock()
 	dev := ps.info.DefaultDevice
 	if _, ok := ps.info.DisksStatus[dev]; !ok {
 		return fmt.Errorf("cannot find default device %s in cache", dev)
@@ -60,6 +62,8 @@ func (ps *Resource) RemovePod(pod *v1.Pod) error {
 	if err != nil {
 		return fmt.Errorf("cannot get pod request: %v", err)
 	}
+	ps.Lock()
+	defer ps.Unlock()
 	dev := ps.info.DefaultDevice
 	if _, ok := ps.info.DisksStatus[dev]; !ok {
 		return fmt.Errorf("cannot find default device %s in cache", dev)
@@ -70,9 +74,6 @@ func (ps *Resource) RemovePod(pod *v1.Pod) error {
 	return nil
 }
 
-//	func (ps *Resource) AdmitPod(pod *v1.Pod) (v1alpha1.IOBandwidth, error) {
-//		return v1alpha1.IOBandwidth{}, nil
-//	}
 func (ps *Resource) PrintInfo() {
 	for disk, diskInfo := range ps.info.DisksStatus {
 		klog.Info("***device: ", disk, " ***")
@@ -81,8 +82,8 @@ func (ps *Resource) PrintInfo() {
 		klog.Info("capacity read: ", diskInfo.Capacity.Read.String())
 		klog.Info("capacity write: ", diskInfo.Capacity.Write.String())
 		klog.Info("capacity total: ", diskInfo.Capacity.Total.String())
-		klog.Info("allocatable read: ", diskInfo.Capacity.Read.String())
-		klog.Info("allocatable write: ", diskInfo.Capacity.Write.String())
-		klog.Info("allocatable total: ", diskInfo.Capacity.Total.String())
+		klog.Info("allocatable read: ", diskInfo.Allocatable.Read.String())
+		klog.Info("allocatable write: ", diskInfo.Allocatable.Write.String())
+		klog.Info("allocatable total: ", diskInfo.Allocatable.Total.String())
 	}
 }

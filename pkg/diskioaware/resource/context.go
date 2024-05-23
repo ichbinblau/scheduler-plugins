@@ -69,7 +69,7 @@ func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
 				if !ok {
 					return fmt.Errorf("node %v doesn't exist in reserved pod", obj.Node)
 				}
-				return utils.UpdateNodeIOStatus(c.VClient, obj.Node, pl)
+				return utils.UpdateNodeIOStatus(ctx, c.VClient, obj.Node, pl)
 			default:
 				klog.Warningf("unexpected work item %#v", obj)
 			}
@@ -150,7 +150,7 @@ func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1
 func (c *ResourceIOContext) RemovePod(pod *corev1.Pod, nodeName string) error {
 	c.Lock()
 	defer c.Unlock()
-	v, err := c.GetReservedPods(pod.Spec.NodeName)
+	v, err := c.GetReservedPods(nodeName)
 	if err != nil {
 		return fmt.Errorf("get reserved pods error: %v", err)
 	}
