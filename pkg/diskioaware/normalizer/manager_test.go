@@ -1,6 +1,7 @@
 package normalizer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -42,15 +43,15 @@ func TestNormalizerManager_LoadPlugins(t *testing.T) {
 		{
 			name: "Successful single plugin loading",
 			plugins: &PlList{
-				{Vendor: "Intel", Model: "P1111", Source: ts.URL + "/m1"},
+				{Vendor: "Intel", Model: "P1111", URL: ts.URL + "/m1"},
 			},
 			expected: true,
 		},
 		{
 			name: "Failed plugin loading",
 			plugins: &PlList{
-				{Vendor: "vendor3", Model: "model3", Source: "http://localhost:8080"},
-				{Vendor: "vendor4", Model: "model4", Source: "http://localhost:8080"},
+				{Vendor: "vendor3", Model: "model3", URL: "http://localhost:8080"},
+				{Vendor: "vendor4", Model: "model4", URL: "http://localhost:8080"},
 			},
 			expected: true,
 		},
@@ -59,7 +60,7 @@ func TestNormalizerManager_LoadPlugins(t *testing.T) {
 	nm := NewNormalizerManager("../sample-plugin", 3)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := nm.LoadPlugins(*tt.plugins, 2)
+			err := nm.LoadPlugins(context.Background(), *tt.plugins, 2)
 			if (err == nil) != tt.expected {
 				t.Errorf("case: %v failed expected error=%v", tt.name, tt.expected)
 			}

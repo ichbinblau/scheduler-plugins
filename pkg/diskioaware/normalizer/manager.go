@@ -22,11 +22,10 @@ const (
 type PlList []PlConfig
 
 type PlConfig struct {
-	Vendor   string `json:"vendor"`
-	Model    string `json:"model"`
-	Source   string `json:"source"`
-	SkipTLS  bool   `json:"skipTLS"`
-	CertPath string `json:"certPath"`
+	Vendor  string `json:"vendor"`
+	Model   string `json:"model"`
+	URL     string `json:"url"`
+	SkipTLS bool   `json:"skipTLS"`
 }
 
 type NormalizerManager struct {
@@ -52,13 +51,13 @@ func (pm *NormalizerManager) Run(ctx context.Context, num int, cmLister corelist
 		if err := json.Unmarshal(data, pls); err != nil {
 			klog.Errorf("failed to deserialize disk model config: %v", err)
 		}
-		pm.LoadPlugins(*pls, num)
+		pm.LoadPlugins(ctx, *pls, num)
 	}
 	go wait.UntilWithContext(ctx, periodJob, resyncDuration)
 }
 
 // LoadPlugin implements the interface method
-func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
+func (pm *NormalizerManager) LoadPlugins(ctx context.Context, l PlList, workers int) error {
 	// todo: cancel with context
 	// load plugins
 	if len(l) == 0 {
@@ -78,12 +77,9 @@ func (pm *NormalizerManager) LoadPlugins(l PlList, workers int) error {
 			for pl := range pls {
 				// use Vendor+Model as key,
 				key := fmt.Sprintf("%s-%s", pl.Vendor, pl.Model)
-				if !isValidURL(pl.Source) {
-					klog.Infof("Invalid url: %s for %s\n", pl.Source, pl.Model)
-				}
-				norm, err := pm.loader.LoadPlugin(pl)
+				norm, err := pm.loader.LoadPlugin(ctx, pl)
 				if err != nil {
-					klog.Infof("Failed to load %v: %v\n", pl.Source, err)
+					klog.Infof("Failed to load %v: %v\n", pl.URL, err)
 				}
 				// normalizer functions as value
 				pm.store.Set(key, norm)
