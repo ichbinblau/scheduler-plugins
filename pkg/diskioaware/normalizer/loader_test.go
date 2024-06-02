@@ -8,9 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var base string = "../sample-plugin/"
+var base string = "../sampleplugin/"
 
 func getPath(base string, name string) string {
 	return filepath.Join(base, name)
@@ -38,7 +41,7 @@ func createTmpFile(n string, content string) (string, error) {
 }
 
 func TestPluginLoader_GetFilePath(t *testing.T) {
-	pl := NewPluginLoader(base, 2)
+	pl := NewPluginLoader(base)
 
 	p := PlConfig{
 		Vendor: "Intel",
@@ -71,48 +74,18 @@ func TestPluginLoader_LoadPlugin(t *testing.T) {
 		t.Fatalf("Failed to create temporary plugin file: %v", err)
 	}
 	defer os.Remove(fName)
+
 	// Set the baseDir to the temporary directory
-	pl := NewPluginLoader(filepath.Dir(fName), 3)
+	pl := NewPluginLoader(filepath.Dir(fName))
+	defer os.Remove(pl.getFilePath(p))
 
 	// Load the plugin
 	_, err = pl.loadPlugin(context.Background(), p)
 	if err != nil {
 		t.Errorf("Failed to load plugin: %v", err)
 	}
+	assert.FileExists(t, pl.getFilePath(p))
 }
-
-// func TestIsValidURL(t *testing.T) {
-// 	tests := []struct {
-// 		name     string
-// 		url      string
-// 		expected bool
-// 	}{
-// 		{
-// 			name:     "Invalid url: w/o protocol",
-// 			url:      "invalid-url",
-// 			expected: false,
-// 		},
-// 		{
-// 			name:     "Invalid url: wrong protocol",
-// 			url:      "file:///tmp/test.txt",
-// 			expected: false,
-// 		},
-// 		{
-// 			name:     "Valid URL",
-// 			url:      "http://example.com",
-// 			expected: true,
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			got := isValidURL(tt.url)
-// 			if got != tt.expected {
-// 				t.Errorf("case: %v failed got=%v expected=%v", tt.name, got, tt.expected)
-// 			}
-// 		})
-// 	}
-// }
 
 func TestDownloadFile(t *testing.T) {
 	content := "downloaded-file"
@@ -152,9 +125,9 @@ func TestDownloadFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Download the file
-
-			err = downloadFile(context.Background(), tt.url, tmpFile, false, 2)
-			t.Log(err)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err = downloadFile(ctx, http.DefaultClient, tt.url, tmpFile)
 			if (err == nil) != tt.success {
 				t.Errorf("case: %v failed expected=%v", tt.name, tt.success)
 			} else if tt.success {
@@ -175,7 +148,7 @@ func TestDownloadFile(t *testing.T) {
 }
 
 func TestPluginLoader_LoadPlugin_Error(t *testing.T) {
-	p, err := os.ReadFile(getPath(base, "foo.so"))
+	p, err := os.ReadFile(getPath(base, "/foo/foo.so"))
 	if err != nil {
 		t.Fatalf("failed to foo.so: %v", err)
 	}
@@ -183,7 +156,7 @@ func TestPluginLoader_LoadPlugin_Error(t *testing.T) {
 		w.Write(p)
 	}))
 	defer ts.Close()
-	pl := NewPluginLoader(base, 3)
+	pl := NewPluginLoader(base)
 
 	conf := PlConfig{
 		Vendor: "Intel",

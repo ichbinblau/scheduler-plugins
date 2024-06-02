@@ -11,11 +11,11 @@ metadata:
 rules:
 - apiGroups: ["diskio.x-k8s.io"]
   resources: ["nodediskdevices"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch", "create"] # todo: change it back
 - apiGroups: ["diskio.x-k8s.io"]
   resources: 
-  - nodediskiostatses
-  - nodediskiostatses/status
+  - nodediskiostats
+  - nodediskiostats/status
   verbs: ["create","get", "update", "patch","watch", "list"] # todo: check permission
 - apiGroups: [""]
   resources: ["pods"]

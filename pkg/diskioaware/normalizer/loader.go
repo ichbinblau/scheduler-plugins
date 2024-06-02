@@ -2,7 +2,6 @@ package normalizer
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -18,21 +17,18 @@ import (
 
 const (
 	defaultMaxRetry = 1
-	httpTimeout     = 30 * time.Second
+	defaultTimeout  = 360 * time.Second
 )
 
 type PluginLoader struct {
-	baseDir    string
-	maxRetries int
+	baseDir string
+	client  *http.Client
 }
 
-func NewPluginLoader(base string, maxRetries int) *PluginLoader {
-	if maxRetries < 1 {
-		maxRetries = defaultMaxRetry
-	}
+func NewPluginLoader(base string) *PluginLoader {
 	return &PluginLoader{
-		baseDir:    base,
-		maxRetries: maxRetries,
+		baseDir: base,
+		client:  http.DefaultClient,
 	}
 }
 
@@ -52,7 +48,7 @@ func (pl *PluginLoader) loadPlugin(ctx context.Context, p PlConfig) (string, err
 	switch scheme {
 	case "http", "https":
 		dst := pl.getFilePath(p)
-		if err := downloadFile(ctx, p.URL, dst, p.SkipTLS, pl.maxRetries); err != nil {
+		if err := downloadFile(ctx, pl.client, p.URL, dst); err != nil {
 			return "", err
 		}
 		return dst, nil
@@ -68,58 +64,48 @@ func (pl *PluginLoader) loadPlugin(ctx context.Context, p PlConfig) (string, err
 }
 
 // DownloadFile will download a url to a local file.
-func downloadFile(ctx context.Context, url string, filepath string, inSecure bool, maxRetries int) error {
-	var tr *http.Transport
-
-	if inSecure {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
+func downloadFile(ctx context.Context, client *http.Client, url string, filepath string) error {
+	// c, cancel := context.WithTimeout(ctx, defaultTimeout)
+	// defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	client := &http.Client{
-		Timeout:   httpTimeout,
-		Transport: tr,
-	}
-	for i := 0; i < maxRetries; i++ {
-		resp, err := client.Do(req)
-		if err != nil {
-			klog.Error("failed to download plugin: %v", err)
-			continue
-		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			klog.Errorf("received %v status code from %q", resp.StatusCode, url)
-			continue
-		}
-		// Create the file
-		out, err := os.Create(filepath)
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-
-		// Write the body to file
-		if _, err = io.Copy(out, resp.Body); err != nil {
-			return err
-		}
-		return nil
+	// klog.Infof("download begin %s", url)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download plugin: %v", err)
 	}
-	return fmt.Errorf("failed to download %s after %d attempts", url, maxRetries)
+	defer resp.Body.Close()
+	// klog.Infof("download done %s", url)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("received %v status code from %q", resp.StatusCode, url)
+	}
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Write the body to file
+	if _, err = io.Copy(out, resp.Body); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (pl *PluginLoader) LoadPlugin(ctx context.Context, p PlConfig) (Normalize, error) {
-	klog.Infof("Loading plugin %s/%s.so\n", p.Vendor, p.Model)
+	if p.Vendor == "" || p.Model == "" || p.URL == "" {
+		return nil, fmt.Errorf("invalid plugin configuration")
+	}
 	dst, err := pl.loadPlugin(ctx, p)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download plugin: %v", err)
+		return nil, err
 	}
 
-	// todo: verify signature
 	// load the plugin
 	plugin, err := plugin.Open(dst)
 	if err != nil {

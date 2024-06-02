@@ -54,7 +54,7 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=diskio.x-k8s.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("nodediskdevices"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Diskio().V1alpha1().NodeDiskDevices().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("nodediskiostatses"):
+	case v1alpha1.SchemeGroupVersion.WithResource("nodediskiostats"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Diskio().V1alpha1().NodeDiskIOStatses().Informer()}, nil
 
 	}

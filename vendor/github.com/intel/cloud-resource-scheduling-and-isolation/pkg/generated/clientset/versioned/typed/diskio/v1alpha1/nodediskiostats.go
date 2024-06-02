@@ -68,7 +68,7 @@ func (c *nodeDiskIOStatses) Get(ctx context.Context, name string, options v1.Get
 	result = &v1alpha1.NodeDiskIOStats{}
 	err = c.client.Get().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
 		Do(ctx).
@@ -85,7 +85,7 @@ func (c *nodeDiskIOStatses) List(ctx context.Context, opts v1.ListOptions) (resu
 	result = &v1alpha1.NodeDiskIOStatsList{}
 	err = c.client.Get().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Do(ctx).
@@ -102,7 +102,7 @@ func (c *nodeDiskIOStatses) Watch(ctx context.Context, opts v1.ListOptions) (wat
 	opts.Watch = true
 	return c.client.Get().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Watch(ctx)
@@ -113,7 +113,7 @@ func (c *nodeDiskIOStatses) Create(ctx context.Context, nodeDiskIOStats *v1alpha
 	result = &v1alpha1.NodeDiskIOStats{}
 	err = c.client.Post().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(nodeDiskIOStats).
 		Do(ctx).
@@ -126,7 +126,7 @@ func (c *nodeDiskIOStatses) Update(ctx context.Context, nodeDiskIOStats *v1alpha
 	result = &v1alpha1.NodeDiskIOStats{}
 	err = c.client.Put().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		Name(nodeDiskIOStats.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(nodeDiskIOStats).
@@ -141,7 +141,7 @@ func (c *nodeDiskIOStatses) UpdateStatus(ctx context.Context, nodeDiskIOStats *v
 	result = &v1alpha1.NodeDiskIOStats{}
 	err = c.client.Put().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		Name(nodeDiskIOStats.Name).
 		SubResource("status").
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -155,7 +155,7 @@ func (c *nodeDiskIOStatses) UpdateStatus(ctx context.Context, nodeDiskIOStats *v
 func (c *nodeDiskIOStatses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		Name(name).
 		Body(&opts).
 		Do(ctx).
@@ -170,7 +170,7 @@ func (c *nodeDiskIOStatses) DeleteCollection(ctx context.Context, opts v1.Delete
 	}
 	return c.client.Delete().
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(&opts).
@@ -183,7 +183,7 @@ func (c *nodeDiskIOStatses) Patch(ctx context.Context, name string, pt types.Pat
 	result = &v1alpha1.NodeDiskIOStats{}
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
-		Resource("nodediskiostatses").
+		Resource("nodediskiostats").
 		Name(name).
 		SubResource(subresources...).
 		VersionedParams(&opts, scheme.ParameterCodec).

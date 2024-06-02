@@ -57,10 +57,6 @@ func (c *IODriver) ProcessProfile(di *DiskInfos) error {
 			Vendor: dev.Vendor,
 			Model:  dev.Model,
 			Type:   string(dev.Type),
-			// Default: v1alpha1.IOBandwidth{
-			// 	Read:  MinDefaultIOBW,
-			// 	Write: MinDefaultIOBW,
-			// },
 			Capacity: v1alpha1.IOBandwidth{
 				Total: dev.TotalBPS,
 				Read:  dev.TotalRBPS,
