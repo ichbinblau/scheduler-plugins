@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -234,7 +235,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 					if err != nil {
 						t.Log(err)
 					}
-					if contains(tt.expectedNodes, nodeName) {
+					if slices.Contains(tt.expectedNodes, nodeName) {
 						t.Logf("Pod %q is on the expected node %s.", p.Name, nodeName)
 					} else {
 						t.Errorf("Pod %s is expected on node %s, but found on node %s",
