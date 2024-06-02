@@ -9,40 +9,51 @@ import (
 	"sync"
 	"time"
 
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 )
 
 const (
-	diskModelConfig = "/etc/kubernetes/diskModels.properties"
+	diskModelConfig = "/tmp/diskModels.properties" // todo: change it back
 	resyncDuration  = 90 * time.Second
 )
 
 type PlList []PlConfig
 
 type PlConfig struct {
-	Vendor  string `json:"vendor"`
-	Model   string `json:"model"`
-	URL     string `json:"url"`
-	SkipTLS bool   `json:"skipTLS"`
+	Vendor string `json:"vendor"`
+	Model  string `json:"model"`
+	URL    string `json:"url"`
 }
 
 type NormalizerManager struct {
 	sync.RWMutex
-	store  *nStore
-	loader *PluginLoader
+	store      *nStore
+	loader     *PluginLoader
+	queue      workqueue.RateLimitingInterface
+	maxRetries int
 }
 
 func NewNormalizerManager(base string, m int) *NormalizerManager {
 	return &NormalizerManager{
-		store:  NewnStore(),
-		loader: &PluginLoader{baseDir: base, maxRetries: m},
+		store:      NewnStore(),
+		loader:     NewPluginLoader(base),
+		queue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "normaliazer-manager"),
+		maxRetries: m,
 	}
 }
 
-func (pm *NormalizerManager) Run(ctx context.Context, num int, cmLister corelisters.ConfigMapLister) {
-	var periodJob = func(ctx context.Context) {
+func (pm *NormalizerManager) Run(ctx context.Context, workers int) {
+	defer utilruntime.HandleCrash()
+	defer pm.queue.ShutDown()
+
+	logger := klog.FromContext(ctx)
+	logger.Info("Starting normalizer manager")
+	defer logger.Info("Shutting down normalizer manager")
+
+	var periodJob = func(context.Context) {
 		data, err := os.ReadFile(diskModelConfig)
 		if err != nil {
 			klog.Errorf("failed to load disk model config: %v", err)
@@ -51,53 +62,62 @@ func (pm *NormalizerManager) Run(ctx context.Context, num int, cmLister corelist
 		if err := json.Unmarshal(data, pls); err != nil {
 			klog.Errorf("failed to deserialize disk model config: %v", err)
 		}
-		pm.LoadPlugins(ctx, *pls, num)
+		// enqueue not existing plugins to load
+		for _, p := range *pls {
+			key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
+			if pm.store.Contains(key) {
+				continue
+			}
+			pm.queue.Add(p)
+			// pm.LoadPlugin(ctx, p)
+		}
 	}
 	go wait.UntilWithContext(ctx, periodJob, resyncDuration)
+
+	for i := 0; i < workers; i++ {
+		go wait.UntilWithContext(ctx, pm.runWorker, time.Second)
+	}
+
+	<-ctx.Done()
+}
+
+func (pm *NormalizerManager) runWorker(ctx context.Context) {
+	for pm.processNextWorkItem(ctx) {
+	}
+}
+
+func (pm *NormalizerManager) processNextWorkItem(ctx context.Context) bool {
+	key, quit := pm.queue.Get()
+	if quit {
+		return false
+	}
+	defer pm.queue.Done(key)
+
+	err := pm.LoadPlugin(ctx, key.(PlConfig))
+	if err == nil {
+		pm.queue.Forget(key)
+	} else if pm.queue.NumRequeues(key) < pm.maxRetries {
+		pm.queue.AddRateLimited(key)
+	} else {
+		utilruntime.HandleError(fmt.Errorf("load plugin %q failed: %v", key, err))
+		pm.queue.Forget(key)
+	}
+	return true
 }
 
 // LoadPlugin implements the interface method
-func (pm *NormalizerManager) LoadPlugins(ctx context.Context, l PlList, workers int) error {
-	// todo: cancel with context
-	// load plugins
-	if len(l) == 0 {
-		return errors.New("plugin list cannot be empty")
+func (pm *NormalizerManager) LoadPlugin(ctx context.Context, p PlConfig) error {
+	// use Vendor+Model as key,
+	key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
+	klog.Infof("Loading plugin %s", key)
+	norm, err := pm.loader.LoadPlugin(ctx, p)
+	if err != nil {
+		return err
 	}
 
-	pls := make(chan PlConfig, 10) // queue of download jobs
-	var wg sync.WaitGroup
-
-	pm.Lock()
-	defer pm.Unlock()
-	// start worker goroutines
-	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for pl := range pls {
-				// use Vendor+Model as key,
-				key := fmt.Sprintf("%s-%s", pl.Vendor, pl.Model)
-				norm, err := pm.loader.LoadPlugin(ctx, pl)
-				if err != nil {
-					klog.Infof("Failed to load %v: %v\n", pl.URL, err)
-				}
-				// normalizer functions as value
-				pm.store.Set(key, norm)
-			}
-		}()
-	}
-
-	// enqueue not existing plugins to load
-	for _, p := range l {
-		key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
-		if pm.store.Contains(key) {
-			continue
-		}
-		pls <- p
-	}
-
-	close(pls) // no more plugins will be added
-	wg.Wait()  // wait for all tasks to complete
+	// normalizer functions as value
+	pm.store.Set(key, norm)
+	klog.Infof("Plugin %s is loaded", key)
 	return nil
 }
 
@@ -116,7 +136,6 @@ func (pm *NormalizerManager) UnloadPlugin(name string) error {
 
 // GetPlugin implements the interface method
 func (pm *NormalizerManager) GetNormalizer(name string) (Normalize, error) {
-
 	pm.Lock()
 	defer pm.Unlock()
 	exec, err := pm.store.Get(name)

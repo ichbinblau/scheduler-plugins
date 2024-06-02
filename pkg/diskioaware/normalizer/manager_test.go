@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -13,17 +14,17 @@ func getBytes(fileName string) ([]byte, error) {
 	if len(fileName) == 0 {
 		return nil, fmt.Errorf("file name is empty")
 	}
-	p, err := os.ReadFile(fmt.Sprintf("../sample-plugin/%v.so", fileName))
+	p, err := os.ReadFile(fmt.Sprintf("../sampleplugin/%s/%v.so", fileName, fileName))
 	if err != nil {
-		return nil, fmt.Errorf("failed to example.so: %v", err)
+		return nil, fmt.Errorf("failed to %s.so: %v", fileName, err)
 	}
 	return p, nil
 }
 
-func TestNormalizerManager_LoadPlugins(t *testing.T) {
+func TestNormalizerManager_LoadPlugin(t *testing.T) {
 	p, err := getBytes("foo")
 	if err != nil {
-		t.Fatalf("failed to foo.so: %v", err)
+		t.Fatal(err)
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(p)
@@ -31,41 +32,46 @@ func TestNormalizerManager_LoadPlugins(t *testing.T) {
 	defer ts.Close()
 
 	tests := []struct {
-		name     string
-		plugins  *PlList
-		expected bool
+		name   string
+		plugin *PlConfig
+		errMsg string
 	}{
 		{
-			name:     "Empty plugin list",
-			plugins:  &PlList{},
-			expected: false,
+			name:   "Empty plugin list",
+			plugin: &PlConfig{},
+			errMsg: "invalid plugin configuration",
 		},
 		{
-			name: "Successful single plugin loading",
-			plugins: &PlList{
-				{Vendor: "Intel", Model: "P1111", URL: ts.URL + "/m1"},
-			},
-			expected: true,
+			name:   "Successful plugin http loading",
+			plugin: &PlConfig{Vendor: "Intel", Model: "P1111", URL: ts.URL},
+			errMsg: "",
 		},
 		{
-			name: "Failed plugin loading",
-			plugins: &PlList{
-				{Vendor: "vendor3", Model: "model3", URL: "http://localhost:8080"},
-				{Vendor: "vendor4", Model: "model4", URL: "http://localhost:8080"},
-			},
-			expected: true,
+			name:   "Successful plugin http loading",
+			plugin: &PlConfig{Vendor: "Intel", Model: "P1111", URL: "file:///../sampleplugin/foo/foo.so"},
+			errMsg: "",
 		},
 	}
 
-	nm := NewNormalizerManager("../sample-plugin", 3)
+	path, err := os.MkdirTemp("/tmp", "normalizer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+
+	nm := NewNormalizerManager(path, 2)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := nm.LoadPlugins(context.Background(), *tt.plugins, 2)
-			if (err == nil) != tt.expected {
-				t.Errorf("case: %v failed expected error=%v", tt.name, tt.expected)
+			err := nm.LoadPlugin(context.Background(), *tt.plugin)
+			if err != nil && len(tt.errMsg) > 0 && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("case: %v failed expected error=%v, got=%v", tt.name, tt.errMsg, err)
 			}
-			for _, p := range *tt.plugins {
-				os.Remove(nm.loader.getFilePath(p))
+
+			if err == nil {
+				key := fmt.Sprintf("%s-%s", tt.plugin.Vendor, tt.plugin.Model)
+				if _, err = nm.GetNormalizer(key); err != nil {
+					t.Errorf("case: %v failed key %v was not set", tt.name, key)
+				}
 			}
 		})
 	}

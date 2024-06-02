@@ -30,14 +30,12 @@ type DiskIO struct {
 	scorer     Scorer
 	nm         *normalizer.NormalizerManager
 	nodeLister corelisters.NodeLister
-	// client        versioned.Interface
-	// sharedFactory externalversions.SharedInformerFactory
 }
 
 const (
-	Name           = "DiskIOAware"
+	Name           = "DiskIO"
 	stateKeyPrefix = "DiskIO-"
-	maxRetries     = 3
+	maxRetries     = 2
 	workers        = 2
 	baseModelDir   = "/tmp"
 )
@@ -75,16 +73,16 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	// load disk vendor normalize functions
 	// watch configmap with version
 	d.nm = normalizer.NewNormalizerManager(baseModelDir, maxRetries)
-	d.nm.Run(ctx, workers, handle.SharedInformerFactory().Core().V1().ConfigMaps().Lister())
+	go d.nm.Run(ctx, workers)
 
-	// initialize scorer
+	//initialize scorer
 	scorer, err := getScorer(args.ScoreStrategy)
 	if err != nil {
 		return nil, err
 	}
 	d.scorer = scorer
 
-	// initialize disk IO resource handler
+	//initialize disk IO resource handler
 	err = d.rh.Run(resource.NewExtendedCache(), handle.ClientSet())
 	if err != nil {
 		return nil, err
@@ -97,7 +95,7 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	}
 	go resource.IoiContext.RunWorkerQueue(ctx)
 
-	// initialize event handling
+	//initialize event handling
 	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
 	nsLister := handle.SharedInformerFactory().Core().V1().Namespaces().Lister()
 	eh := resource.NewIOEventHandler(d.rh, handle, podLister, nsLister, d.nm)
