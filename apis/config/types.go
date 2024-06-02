@@ -271,8 +271,7 @@ type SySchedArgs struct {
 type DiskIOArgs struct {
 	metav1.TypeMeta
 
-	ScoreStrategy string
-	// DiskIOModelConfig   string   // the name of the configmap for the disk IO models
-	// DiskIOModelConfigNS string   // the namespace of the configmap for the disk IO models
+	ScoreStrategy     string
+	DiskIOModelConfig string // the path to the config file for the disk IO models
 	NSWhiteList []string // the whitelisted pod namespaces
 }

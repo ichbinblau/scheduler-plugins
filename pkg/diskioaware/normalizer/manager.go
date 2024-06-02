@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	diskModelConfig = "/tmp/diskModels.properties" // todo: change it back
-	resyncDuration  = 90 * time.Second
+	// diskModelConfig = "/tmp/diskModels.properties" // todo: change it back
+	resyncDuration = 90 * time.Second
 )
 
 type PlList []PlConfig
@@ -45,7 +45,7 @@ func NewNormalizerManager(base string, m int) *NormalizerManager {
 	}
 }
 
-func (pm *NormalizerManager) Run(ctx context.Context, workers int) {
+func (pm *NormalizerManager) Run(ctx context.Context, diskModelConfig string, workers int) {
 	defer utilruntime.HandleCrash()
 	defer pm.queue.ShutDown()
 
