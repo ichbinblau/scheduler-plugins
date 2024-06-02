@@ -106,6 +106,8 @@ var (
 	// Defaults for DiskIO aware
 	// defaultDiskIOScoreStrategy is the default score strategy for disk io aware plugin
 	defaultDiskIOScoreStrategy string = "LeastAllocated"
+	// defaultDiskIOModelConfig is the default file path for model plugin configurations
+	defaultDiskIOModelConfig string = "/etc/kubernetes/diskModels.properties"
 )
 
 // SetDefaults_CoschedulingArgs sets the default parameters for Coscheduling plugin.
@@ -259,6 +261,10 @@ func SetDefaults_SySchedArgs(obj *SySchedArgs) {
 func SetDefaults_DiskIOArgs(obj *DiskIOArgs) {
 	if obj.ScoreStrategy == nil {
 		obj.ScoreStrategy = &defaultDiskIOScoreStrategy
+	}
+
+	if obj.DiskIOModelConfig == nil {
+		obj.DiskIOModelConfig = &defaultDiskIOModelConfig
 	}
 
 	if obj.NSWhiteList == nil {

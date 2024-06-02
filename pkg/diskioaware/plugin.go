@@ -73,7 +73,7 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 	// load disk vendor normalize functions
 	// watch configmap with version
 	d.nm = normalizer.NewNormalizerManager(baseModelDir, maxRetries)
-	go d.nm.Run(ctx, workers)
+	go d.nm.Run(ctx, args.DiskIOModelConfig, workers)
 
 	//initialize scorer
 	scorer, err := getScorer(args.ScoreStrategy)

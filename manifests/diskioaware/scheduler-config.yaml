@@ -16,6 +16,7 @@ profiles:
     args:
       # other strategies are MostAllocated
       scoreStrategy: "LeastAllocated"
+      diskIOModelConfig: "/tmp/diskModels.properties"
       nsWhiteList: 
       - kube-system
       - ioi-system
