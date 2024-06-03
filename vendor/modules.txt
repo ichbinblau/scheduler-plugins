@@ -171,8 +171,10 @@ github.com/inconshreveable/mousetrap
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned
+github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned/fake
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned/scheme
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned/typed/diskio/v1alpha1
+github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned/typed/diskio/v1alpha1/fake
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions/diskio
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/informers/externalversions/diskio/v1alpha1
