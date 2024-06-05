@@ -27,6 +27,7 @@ import (
 	schedapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	fwkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
+	imageutils "k8s.io/kubernetes/test/utils/image"
 	scheconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware"
 	"sigs.k8s.io/scheduler-plugins/test/util"
@@ -46,7 +47,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 	testCtx.ClientSet = cs
 	testCtx.KubeConfig = globalKubeConfig
 
-	if err := wait.PollUntilContextTimeout(testCtx.Ctx, 100*time.Millisecond, 3*time.Second, true, func(ctx context.Context) (done bool, err error) {
+	if err := wait.PollUntilContextTimeout(testCtx.Ctx, 100*time.Millisecond, 3*time.Second, false, func(ctx context.Context) (done bool, err error) {
 		groupList, _, err := cs.ServerGroupsAndResources()
 		if err != nil {
 			return false, nil
@@ -127,12 +128,12 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 		t.Logf("Node %s created: %s", nodeName, formatObject(n))
 	}
 
-	nodeList, err := cs.CoreV1().Nodes().List(testCtx.Ctx, metav1.ListOptions{})
+	_, err = cs.CoreV1().Nodes().List(testCtx.Ctx, metav1.ListOptions{})
 	if err != nil {
 		t.Errorf("can't list nodes: %s", err.Error())
 	}
 
-	t.Logf("NodeList: %v", nodeList)
+	// t.Logf("NodeList: %v", nodeList)
 
 	nodeDiskInfo1 := MakeNodeDiskDevice(common.CRNameSpace, fmt.Sprintf("%s-%s", nodes[0], common.NodeDiskDeviceCRSuffix)).Spec(
 		diskiov1alpha1.NodeDiskDeviceSpec{
@@ -170,6 +171,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			},
 		}).Status(diskiov1alpha1.NodeDiskDeviceStatus{}).Obj()
 
+	pause := imageutils.GetPauseImageName()
 	for _, tt := range []struct {
 		name             string
 		pods             []*v1.Pod
@@ -181,9 +183,9 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			name: "Case1: enough BW to schedule two guaranteed pods",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
-					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"4k\"}"}).Obj(),
+					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
 				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{
-					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"4k\"}"}).Obj(),
+					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
 			},
 			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{
 				nodeDiskInfo1,
@@ -193,7 +195,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 				"pod1",
 				"pod2",
 			},
-			expectedNodes: []string{""},
+			expectedNodes: []string{"fake-node-2"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,11 +207,13 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 						common.NodeDiskIOInfoCRSuffix)})
 			defer cleanupPods(t, testCtx, tt.pods)
 
+			t.Log("Step 1 - create the NodeDiskDevice CR...")
 			// create NodeDiskDevice CRs
 			if err := createNodeDiskDevices(testCtx.Ctx, extClient, tt.nodeDiskIOInfoes); err != nil {
 				t.Fatal(err)
 			}
 
+			t.Log("Step 2 - create pods...")
 			// create pods
 			for _, pod := range tt.pods {
 				_, err := cs.CoreV1().Pods(pod.Namespace).Create(testCtx.Ctx, pod, metav1.CreateOptions{})
@@ -219,6 +223,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 				time.Sleep(2 * time.Second)
 			}
 
+			t.Logf("Step 3 -  Wait for expected status...")
 			for _, p := range tt.pods {
 				if len(tt.expectedNodes) > 0 {
 					// Wait for the pod to be scheduled.

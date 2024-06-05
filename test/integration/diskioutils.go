@@ -106,7 +106,7 @@ func cleanupNodeDiskDevices(ctx context.Context, client versioned.Interface, ndd
 func cleanupNodeDiskIOStats(ctx context.Context, client versioned.Interface, ns string, names []string) {
 	for _, name := range names {
 		err := client.DiskioV1alpha1().NodeDiskIOStatses(ns).Delete(ctx, name, metav1.DeleteOptions{})
-		if err != nil {
+		if err != nil && !errors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to clean up NodeDiskIOStats", "NodeDiskIOStats", name)
 		}
 	}
