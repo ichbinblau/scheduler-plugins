@@ -82,6 +82,7 @@ func (ps *IOEventHandler) BuildEvtHandler(ctx context.Context, podInformer cache
 	if _, err := podInformer.AddEventHandler(fhandler); err != nil {
 		return err
 	}
+	go podInformer.Run(ctx.Done())
 	if !cache.WaitForCacheSync(ctx.Done(), podInformer.HasSynced) {
 		return fmt.Errorf("timed out waiting for caches to sync Pod")
 	}
