@@ -272,6 +272,6 @@ type DiskIOArgs struct {
 	metav1.TypeMeta
 
 	ScoreStrategy     string
-	DiskIOModelConfig string // the path to the config file for the disk IO models
-	NSWhiteList []string // the whitelisted pod namespaces
+	DiskIOModelConfig string   // the path to the config file for the disk IO models
+	NSWhiteList       []string // the whitelisted pod namespaces
 }
