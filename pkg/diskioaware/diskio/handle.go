@@ -9,7 +9,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
-	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/utils"
 )
 
 type Handle struct {
@@ -95,7 +94,7 @@ func (h *Handle) UpdateCacheNodeStatus(nodeName string, nodeIoBw v1alpha1.NodeDi
 	return nil
 }
 func (h *Handle) IsIORequired(annotations map[string]string) bool {
-	if _, ok := annotations[utils.DiskIOAnnotation]; ok {
+	if _, ok := annotations[common.DiskIOAnnotation]; ok {
 		return true
 	}
 	return false
