@@ -1,6 +1,7 @@
 package iodriver
 
 import (
+	"context"
 	"log"
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
@@ -23,9 +24,11 @@ func GetFakeDevice() *DiskInfo {
 		TotalBPS:   resource.MustParse("2000Mi"),
 		Model:      "P4510",
 		Vendor:     "Intel",
+		ReadRatio:  map[string]float64{},
+		WriteRatio: map[string]float64{},
 	}
-	readRatios := []float64{1, 2, 3, 4, 5}
-	writeRatios := []float64{1, 2, 3, 4, 6.2}
+	readRatios := []float64{1, 1, 1, 1, 1, 1}
+	writeRatios := []float64{1, 1, 1, 1, 1, 1}
 	for index, ratio := range readRatios {
 		f.ReadRatio[BlockSize[index]] = ratio
 	}
@@ -47,7 +50,7 @@ func GetDiskProfile() *DiskInfos {
 }
 
 // get disk profile result and create CR
-func (c *IODriver) ProcessProfile(di *DiskInfos) error {
+func (c *IODriver) ProcessProfile(ctx context.Context, di *DiskInfos) error {
 	log.Printf("now in disk ProcessProfile: %v", di)
 
 	devList := make(map[string]v1alpha1.DiskDevice)
@@ -57,10 +60,6 @@ func (c *IODriver) ProcessProfile(di *DiskInfos) error {
 			Vendor: dev.Vendor,
 			Model:  dev.Model,
 			Type:   string(dev.Type),
-			// Default: v1alpha1.IOBandwidth{
-			// 	Read:  MinDefaultIOBW,
-			// 	Write: MinDefaultIOBW,
-			// },
 			Capacity: v1alpha1.IOBandwidth{
 				Total: dev.TotalBPS,
 				Read:  dev.TotalRBPS,
@@ -75,7 +74,7 @@ func (c *IODriver) ProcessProfile(di *DiskInfos) error {
 	s.Spec.NodeName = n
 	s.Spec.Devices = devList
 
-	err := c.CreateNodeDiskDeviceCR(s)
+	err := c.CreateNodeDiskDeviceCR(ctx, s)
 	if err != nil {
 		return err
 	}

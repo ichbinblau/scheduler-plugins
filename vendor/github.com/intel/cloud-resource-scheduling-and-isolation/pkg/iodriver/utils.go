@@ -10,7 +10,7 @@ import (
 
 const (
 	NodeDiskDeviceCRSuffix string        = "nodediskdevice"
-	NodeDiskIOInfoCRSuffix string        = "nodediskioinfo"
+	NodeDiskIOInfoCRSuffix string        = "nodediskiostats"
 	CRNameSpace            string        = "ioi-system"
 	DiskIOAnnotation       string        = "blockio.kubernetes.io/resources"
 	NodeIOStatusCR         string        = "NodeDiskIOStats"

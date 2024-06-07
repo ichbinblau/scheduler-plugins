@@ -18,14 +18,23 @@ func (n barNormalizer) Name() string {
 // ioRequest example: {"rbps": "30Mi", "wbps": "20Mi", "blocksize": "4k"}
 func (n barNormalizer) EstimateRequest(ioReq string) (string, error) {
 	var req = &iodriver.IORequest{}
+	var resp = &v1alpha1.IOBandwidth{}
 
-	err := json.Unmarshal([]byte(ioReq), req)
-	if err != nil {
-		return "", err
-	}
-	resp, err := normalize(req)
-	if err != nil {
-		return "", err
+	if len(ioReq) == 0 {
+		resp = &v1alpha1.IOBandwidth{
+			Read:  iodriver.MinDefaultIOBW,
+			Write: iodriver.MinDefaultIOBW,
+			Total: iodriver.MinDefaultTotalIOBW,
+		}
+	} else {
+		err := json.Unmarshal([]byte(ioReq), req)
+		if err != nil {
+			return "", err
+		}
+		resp, err = normalize(req)
+		if err != nil {
+			return "", err
+		}
 	}
 	normalized, err := json.Marshal(resp)
 	if err != nil {
