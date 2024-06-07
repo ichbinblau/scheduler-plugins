@@ -232,7 +232,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			name: "Case4: not enough BW to schedule two guaranteed pods to node support diskioaware",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
-					common.DiskIOAnnotation: "{\"rbps\": \"2000\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
+					common.DiskIOAnnotation: "{\"rbps\": \"2000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
 				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{
 					common.DiskIOAnnotation: "{\"rbps\": \"3000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
 			},
