@@ -17,6 +17,8 @@ limitations under the License.
 package validation
 
 import (
+	"os"
+
 	apimachineryvalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -62,8 +64,19 @@ func ValidateDiskIOArgs(path *field.Path, args *config.DiskIOArgs) error {
 	if err := validateDiskIOWhiteListNamespace(args.NSWhiteList, nswlPath); err != nil {
 		allErrs = append(allErrs, err)
 	}
+	mcPath := path.Child("diskIOModelConfig")
+	if err := validateDiskIOModelConfig(args.DiskIOModelConfig, mcPath); err != nil {
+		allErrs = append(allErrs, err)
+	}
 
 	return allErrs.ToAggregate()
+}
+
+func validateDiskIOModelConfig(configPath string, path *field.Path) *field.Error {
+	if _, err := os.Stat(configPath); err != nil {
+		return field.Invalid(path, configPath, "invalid DiskIOModelConfig")
+	}
+	return nil
 }
 
 func validateDiskIOScoreStrategy(scoreStrategy string, path *field.Path) *field.Error {

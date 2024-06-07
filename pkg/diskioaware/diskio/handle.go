@@ -53,7 +53,7 @@ func (h *Handle) AddCacheNodeInfo(node string, disks map[string]v1alpha1.DiskDev
 				Total: info.Capacity.Total.DeepCopy(),
 			},
 		}
-		if nodeInfo.DefaultDevice == string(common.EmptyDir) {
+		if info.Type == string(common.EmptyDir) {
 			nodeInfo.DefaultDevice = disk
 		}
 	}

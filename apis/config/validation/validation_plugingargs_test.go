@@ -18,6 +18,7 @@ package validation
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -69,6 +70,11 @@ func TestValidateNodeResourceTopologyMatchArgs(t *testing.T) {
 }
 
 func TestValidateDiskIOArgs(t *testing.T) {
+	tempFile, err := os.CreateTemp(os.TempDir(), "validateDiskIOArgs")
+	if err != nil {
+		t.Fatal("Failed to create temp file", err)
+	}
+	defer os.Remove(tempFile.Name())
 	testCases := []struct {
 		args        *config.DiskIOArgs
 		expectedErr error
@@ -77,8 +83,9 @@ func TestValidateDiskIOArgs(t *testing.T) {
 		{
 			description: "correct config",
 			args: &config.DiskIOArgs{
-				ScoreStrategy: string(config.LeastAllocated),
-				NSWhiteList:   []string{"ns1", "ns2"},
+				ScoreStrategy:     string(config.LeastAllocated),
+				NSWhiteList:       []string{"ns1", "ns2"},
+				DiskIOModelConfig: tempFile.Name(),
 			},
 		},
 		{
@@ -96,6 +103,15 @@ func TestValidateDiskIOArgs(t *testing.T) {
 				NSWhiteList:   []string{"!!!!"},
 			},
 			expectedErr: fmt.Errorf("invalid namespace format"),
+		},
+		{
+			description: "incorrect config, wrong model config path",
+			args: &config.DiskIOArgs{
+				ScoreStrategy:     string(config.LeastAllocated),
+				NSWhiteList:       []string{"kube-system"},
+				DiskIOModelConfig: "!@#$$",
+			},
+			expectedErr: fmt.Errorf("invalid DiskIOModelConfig"),
 		},
 	}
 
