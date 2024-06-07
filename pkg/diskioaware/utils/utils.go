@@ -17,8 +17,6 @@ import (
 	hashutil "k8s.io/kubernetes/pkg/util/hash"
 )
 
-const DiskIOAnnotation = "diskio.intel.com/io-bandwidth"
-
 type IORequest struct {
 	Rbps      string `json:"rbps"`
 	Wbps      string `json:"wbps"`

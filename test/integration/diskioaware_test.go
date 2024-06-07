@@ -155,7 +155,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 
 	nodeDiskInfo2 := MakeNodeDiskDevice(common.CRNameSpace, fmt.Sprintf("%s-%s", nodes[1], common.NodeDiskDeviceCRSuffix)).Spec(
 		diskiov1alpha1.NodeDiskDeviceSpec{
-			NodeName: nodes[0],
+			NodeName: nodes[1],
 			Devices: map[string]diskiov1alpha1.DiskDevice{
 				"fakeDeviceId": {
 					Name:   common.FakeDeviceID,
@@ -195,7 +195,80 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 				"pod1",
 				"pod2",
 			},
+			expectedNodes: []string{"fake-node-1"},
+		},
+		{
+			name: "Case2: enough BW to schedule two best effort pods to node not support diskioaware",
+			pods: []*v1.Pod{
+				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{}).Container(pause).Obj(),
+				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{}).Container(pause).Obj(),
+			},
+			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{
+				nodeDiskInfo1,
+			},
+			expectedPods: []string{
+				"pod1",
+				"pod2",
+			},
 			expectedNodes: []string{"fake-node-2"},
+		},
+		{
+			name: "Case3: enough BW to schedule two best effort pods to node support diskioaware",
+			pods: []*v1.Pod{
+				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{}).Container(pause).Obj(),
+				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{}).Container(pause).Obj(),
+			},
+			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{
+				nodeDiskInfo1,
+				nodeDiskInfo2,
+			},
+			expectedPods: []string{
+				"pod1",
+				"pod2",
+			},
+			expectedNodes: []string{"fake-node-1", "fake-node-2"},
+		},
+		{
+			name: "Case4: not enough BW to schedule two guaranteed pods to node support diskioaware",
+			pods: []*v1.Pod{
+				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"2000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
+				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"3000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
+			},
+			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{
+				nodeDiskInfo1,
+				nodeDiskInfo2,
+			},
+			expectedPods:  []string{},
+			expectedNodes: []string{},
+		},
+		{
+			name: "Case5: schedule two guaranteed pods, one pod success and one pod fail",
+			pods: []*v1.Pod{
+				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"1000Mi\", \"wbps\": \"1000Mi\", \"blocksize\": \"512\"}"}).Container(pause).Obj(),
+				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"3000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
+			},
+			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{
+				nodeDiskInfo1,
+				nodeDiskInfo2,
+			},
+			expectedPods:  []string{"pod1"},
+			expectedNodes: []string{"fake-node-1"},
+		},
+		{
+			name: "Case6: schedule two guaranteed pods, but no node's disk io info is registed",
+			pods: []*v1.Pod{
+				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"10Mi\", \"wbps\": \"10Mi\", \"blocksize\": \"512\"}"}).Container(pause).Obj(),
+				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{
+					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"512\"}"}).Container(pause).Obj(),
+			},
+			nodeDiskIOInfoes: []*diskiov1alpha1.NodeDiskDevice{},
+			expectedPods:     []string{},
+			expectedNodes:    []string{},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,30 +298,34 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 
 			t.Logf("Step 3 -  Wait for expected status...")
 			for _, p := range tt.pods {
-				if len(tt.expectedNodes) > 0 {
-					// Wait for the pod to be scheduled.
-					if err := wait.PollUntilContextTimeout(testCtx.Ctx, 1*time.Second, 20*time.Second, false, func(_ context.Context) (bool, error) {
-						return podScheduled(cs, ns, p.Name), nil
-
-					}); err != nil {
+				err := wait.PollUntilContextTimeout(testCtx.Ctx, 1*time.Second, 20*time.Second, false, func(_ context.Context) (bool, error) {
+					return podScheduled(cs, ns, p.Name), nil
+				})
+				if err == nil {
+					if !slices.Contains(tt.expectedPods, p.Name) {
+						t.Errorf("pod %q should not be scheduled", p.Name)
+						continue
+					}
+				} else {
+					if slices.Contains(tt.expectedPods, p.Name) {
 						t.Errorf("pod %q to be scheduled, error: %v", p.Name, err)
-					}
-
-					t.Logf("Pod %v scheduled", p.Name)
-
-					nodeName, err := getNodeName(testCtx.Ctx, cs, ns, p.Name)
-					if err != nil {
-						t.Log(err)
-					}
-					if slices.Contains(tt.expectedNodes, nodeName) {
-						t.Logf("Pod %q is on the expected node %s.", p.Name, nodeName)
 					} else {
-						t.Errorf("Pod %s is expected on node %s, but found on node %s",
-							p.Name, tt.expectedNodes, nodeName)
+						continue
 					}
 				}
-			}
+				t.Logf("Pod %v scheduled to %v", p.Name, p.Spec.NodeName)
 
+				nodeName, err := getNodeName(testCtx.Ctx, cs, ns, p.Name)
+				if err != nil {
+					t.Log(err)
+				}
+				if slices.Contains(tt.expectedNodes, nodeName) {
+					t.Logf("Pod %q is on the expected node %s.", p.Name, nodeName)
+				} else {
+					t.Errorf("Pod %s is expected on node %s, but found on node %s",
+						p.Name, tt.expectedNodes, nodeName)
+				}
+			}
 			t.Logf("Case %v finished", tt.name)
 		})
 	}

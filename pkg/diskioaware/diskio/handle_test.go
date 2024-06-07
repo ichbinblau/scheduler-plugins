@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	diskioresource "sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
-	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/utils"
 )
 
 func fakeResourceCache() diskioresource.ExtendedCache {
@@ -196,7 +195,7 @@ func TestHandle_IsIORequired(t *testing.T) {
 			name: "has disk io annotation",
 			args: args{
 				annotations: map[string]string{
-					utils.DiskIOAnnotation: "",
+					common.DiskIOAnnotation: "",
 				},
 			},
 			want: true,
