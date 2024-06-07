@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientretry "k8s.io/client-go/util/retry"
 
@@ -17,7 +16,7 @@ import (
 )
 
 func (c *IODriver) WatchNodeDiskIOStats(ctx context.Context) error {
-	nodeInfoInformerFactory := externalinformer.NewSharedInformerFactory(c.clientset, 0)
+	nodeInfoInformerFactory := externalinformer.NewSharedInformerFactory(c.excs, 0)
 
 	statusInfoInformer := nodeInfoInformerFactory.Diskio().V1alpha1().NodeDiskIOStatses().Informer()
 	statusInfoHandler := cache.FilteringResourceEventHandler{
@@ -92,7 +91,7 @@ func (c *IODriver) processDiskCrData(data *v1alpha1.NodeDiskIOStats) error {
 		return fmt.Errorf("diskInfos is nil")
 	}
 
-	if data.Generation <= *c.observedGeneration {
+	if c.observedGeneration != nil && data.Generation <= *c.observedGeneration {
 		return fmt.Errorf("the generation is earlier than the one in cache")
 	}
 
@@ -111,8 +110,7 @@ func (c *IODriver) processDiskCrData(data *v1alpha1.NodeDiskIOStats) error {
 		if pInfo, ok := c.podCrInfos[podId]; !ok || pInfo == nil {
 			ioAnn, ok := anns[podId]
 			if !ok {
-				log.Printf("pod (%s) annotation is not found", podId)
-				continue
+				ioAnn = ""
 			}
 			bw, _ := EstimateRequest(ioAnn)
 			c.podCrInfos[podId] = &PodCrInfo{
@@ -128,12 +126,15 @@ func (c *IODriver) processDiskCrData(data *v1alpha1.NodeDiskIOStats) error {
 			delete(c.podCrInfos, podId)
 		}
 	}
-	bw := c.calDiskAllocatable(c.diskInfos.EmptyDir)
+	bw, err := c.calDiskAllocatable(c.diskInfos.EmptyDir)
+	if err != nil {
+		return err
+	}
 	c.mu.Unlock()
 
 	toUpdate := make(map[string]v1alpha1.IOBandwidth)
 	toUpdate[c.diskInfos.EmptyDir] = *bw
-	err = c.UpdateNodeDiskIOInfoStatus(toUpdate)
+	err = c.UpdateNodeDiskIOInfoStatus(context.Background(), toUpdate)
 	if err != nil {
 		return err
 	}
@@ -142,11 +143,11 @@ func (c *IODriver) processDiskCrData(data *v1alpha1.NodeDiskIOStats) error {
 
 func (c *IODriver) getPodAnnOnNode() (map[string]string, error) {
 	ann := make(map[string]string)
-	pods, err := c.podLister.List(labels.Everything())
+	pods, err := c.cs.CoreV1().Pods(metav1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %v", err)
+		return nil, err
 	}
-	for _, pod := range pods {
+	for _, pod := range pods.Items {
 		if pod.Spec.NodeName == c.nodeName || pod.Spec.NodeName == "" {
 			ba, ok := pod.Annotations[DiskIOAnnotation]
 			if ok {
@@ -159,26 +160,26 @@ func (c *IODriver) getPodAnnOnNode() (map[string]string, error) {
 	return ann, nil
 }
 
-func (e *IODriver) GetNodeDiskIOStats() (*v1alpha1.NodeDiskIOStats, error) {
-	if e.clientset == nil {
+func (e *IODriver) GetNodeDiskIOStats(ctx context.Context) (*v1alpha1.NodeDiskIOStats, error) {
+	if e.excs == nil {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
 	if len(e.nodeName) == 0 {
 		return nil, fmt.Errorf("node name cannot be empty")
 	}
-	obj, err := e.clientset.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).Get(context.TODO(), GetCRName(e.nodeName, NodeDiskIOInfoCRSuffix), metav1.GetOptions{})
+	obj, err := e.excs.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).Get(ctx, GetCRName(e.nodeName, NodeDiskIOInfoCRSuffix), metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return obj, nil
 }
 
-func (e *IODriver) UpdateNodeDiskIOInfoStatus(toUpdate map[string]v1alpha1.IOBandwidth) error {
+func (e *IODriver) UpdateNodeDiskIOInfoStatus(ctx context.Context, toUpdate map[string]v1alpha1.IOBandwidth) error {
 	return clientretry.RetryOnConflict(UpdateBackoff, func() error {
 		var err error
 		var sts *v1alpha1.NodeDiskIOStats
 
-		sts, err = e.GetNodeDiskIOStats()
+		sts, err = e.GetNodeDiskIOStats(ctx)
 		if err != nil {
 			return err
 		}
@@ -191,10 +192,14 @@ func (e *IODriver) UpdateNodeDiskIOInfoStatus(toUpdate map[string]v1alpha1.IOBan
 			newSts.Status.AllocatableBandwidth = make(map[string]v1alpha1.IOBandwidth)
 		}
 		for key, val := range toUpdate {
-			newSts.Status.AllocatableBandwidth[key] = val
+			if value, ok := newSts.Status.AllocatableBandwidth[key]; ok && reflect.DeepEqual(value, val) {
+				return nil
+			} else {
+				newSts.Status.AllocatableBandwidth[key] = val
+			}
 		}
 
-		if _, err := e.clientset.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).UpdateStatus(context.TODO(), newSts, metav1.UpdateOptions{}); err != nil {
+		if _, err := e.excs.DiskioV1alpha1().NodeDiskIOStatses(CRNameSpace).UpdateStatus(ctx, newSts, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to patch the NodeIOStatus: %v", err)
 		}
 		return nil
@@ -202,10 +207,13 @@ func (e *IODriver) UpdateNodeDiskIOInfoStatus(toUpdate map[string]v1alpha1.IOBan
 }
 
 // assume the lock is acquired
-func (e *IODriver) calDiskAllocatable(diskId string) *v1alpha1.IOBandwidth {
+func (e *IODriver) calDiskAllocatable(diskId string) (*v1alpha1.IOBandwidth, error) {
 	log.Println("now start to calDiskAllocatable")
 
-	diskInfo := e.diskInfos.Info[diskId]
+	diskInfo, ok := e.diskInfos.Info[diskId]
+	if !ok {
+		return nil, fmt.Errorf("failed to get disk info for %s", diskId)
+	}
 	sizeRead := diskInfo.TotalRBPS
 	sizeWrite := diskInfo.TotalWBPS
 	sizeTotal := diskInfo.TotalBPS
@@ -222,20 +230,39 @@ func (e *IODriver) calDiskAllocatable(diskId string) *v1alpha1.IOBandwidth {
 		Total: sizeTotal,
 		Write: sizeWrite,
 		Read:  sizeRead,
-	}
+	}, nil
 }
 
-func (e *IODriver) CreateNodeDiskDeviceCR(c *v1alpha1.NodeDiskDevice) error {
-	cur, err := e.clientset.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Get(context.TODO(), c.Name, metav1.GetOptions{})
+// emulate
+func (e *IODriver) getRealtimeDiskAllocable(diskId string) *v1alpha1.IOBandwidth {
+	log.Println("now start to getRealtimeDiskAllocable")
+	bw, err := e.calDiskAllocatable(diskId)
+	if err != nil {
+		return nil
+	}
+	if e.burstUp {
+		bw.Total.Add(MinDefaultTotalIOBW)
+		bw.Write.Add(MinDefaultIOBW)
+		bw.Read.Add(MinDefaultIOBW)
+	} else {
+		bw.Total.Sub(MinDefaultTotalIOBW)
+		bw.Write.Sub(MinDefaultIOBW)
+		bw.Read.Sub(MinDefaultIOBW)
+	}
+	return bw
+}
+
+func (e *IODriver) CreateNodeDiskDeviceCR(ctx context.Context, c *v1alpha1.NodeDiskDevice) error {
+	cur, err := e.excs.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Get(ctx, c.Name, metav1.GetOptions{})
 	if err == nil {
 		c.SetResourceVersion(cur.GetResourceVersion())
 		// todo: retry
-		_, err = e.clientset.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Update(context.TODO(), c, metav1.UpdateOptions{})
+		_, err = e.excs.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Update(ctx, c, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = e.clientset.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Create(context.TODO(), c, metav1.CreateOptions{})
+		_, err = e.excs.DiskioV1alpha1().NodeDiskDevices(CRNameSpace).Create(ctx, c, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}

@@ -9,48 +9,56 @@ import (
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/generated/clientset/versioned"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type IODriver struct {
 	mu                 sync.RWMutex
-	podLister          corelisters.PodLister
-	clientset          versioned.Interface
+	cs                 kubernetes.Interface
+	excs               versioned.Interface
 	nodeName           string
 	diskInfos          *DiskInfos            // key:device id
 	podCrInfos         map[string]*PodCrInfo // key:podUid
 	observedGeneration *int64
+	burstUp            bool
 }
 
-func NewIODriver(ctx context.Context) (*IODriver, error) {
-	n, ok := os.LookupEnv("Node_Name")
+func NewIODriver(cfg Config) (*IODriver, error) {
+	n, ok := os.LookupEnv("NodeName")
 	if !ok {
 		return nil, fmt.Errorf("init client failed: unable to get node name")
 	}
 
-	l, versioned, err := initClient(ctx)
+	core, versioned, err := initClient(cfg.Kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("init client failed: %v", err)
 	} else {
 		log.Println("init client succeeded")
 	}
 	return &IODriver{
-		clientset:          versioned,
-		podLister:          l,
+		cs:                 core,
+		excs:               versioned,
 		nodeName:           n,
 		diskInfos:          &DiskInfos{},
+		podCrInfos:         map[string]*PodCrInfo{},
 		observedGeneration: nil,
+		burstUp:            false,
 	}, nil
 }
 
-func initClient(ctx context.Context) (corelisters.PodLister, versioned.Interface, error) {
+func initClient(kubeconfig string) (kubernetes.Interface, versioned.Interface, error) {
 	var err error
-	config, err := rest.InClusterConfig()
+	var config *rest.Config
+	_, err = os.Stat(kubeconfig)
+	if err == nil {
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	} else {
+		config, err = rest.InClusterConfig()
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,25 +68,18 @@ func initClient(ctx context.Context) (corelisters.PodLister, versioned.Interface
 		return nil, nil, fmt.Errorf("core client init err: %v", err)
 	}
 
-	//todo: change resync period
-	coreFactory := informers.NewSharedInformerFactory(coreclient, 0)
-	coreFactory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), coreFactory.Core().V1().Pods().Informer().HasSynced) {
-		return nil, nil, fmt.Errorf("timed out waiting for caches to sync pods")
-	}
-
 	clientset, err := versioned.NewForConfig(config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("clientset init err: %v", err)
 	}
 
-	return coreFactory.Core().V1().Pods().Lister(), clientset, nil
+	return coreclient, clientset, nil
 }
 
 func (c *IODriver) Run(ctx context.Context) {
 	// get profile result and create DiskDevice CR
 	info := GetDiskProfile()
-	if err := c.ProcessProfile(info); err != nil {
+	if err := c.ProcessProfile(ctx, info); err != nil {
 		log.Fatal(err)
 	}
 
@@ -96,13 +97,14 @@ func (c *IODriver) Run(ctx context.Context) {
 
 func (c *IODriver) periodicUpdate(ctx context.Context) {
 	c.mu.RLock()
-	bw := c.calDiskAllocatable(c.diskInfos.EmptyDir)
-	c.mu.Unlock()
+	bw := c.getRealtimeDiskAllocable(c.diskInfos.EmptyDir)
+	c.mu.RUnlock()
+	c.burstUp = !c.burstUp
 
 	toUpdate := make(map[string]v1alpha1.IOBandwidth)
 	toUpdate[c.diskInfos.EmptyDir] = *bw
-	err := c.UpdateNodeDiskIOInfoStatus(toUpdate)
-	if err != nil {
+	err := c.UpdateNodeDiskIOInfoStatus(ctx, toUpdate)
+	if err != nil && !errors.IsNotFound(err) {
 		log.Printf("failed to update node io stats: %v", err)
 	}
 }

@@ -37,3 +37,7 @@ type PodCrInfo struct {
 	bw    *v1alpha1.IOBandwidth
 	devId string // diskId
 }
+
+type Config struct {
+	Kubeconfig string
+}
