@@ -43,7 +43,7 @@ func composeDiskModelConfig(url string) (string, error) {
 	}
 
 	// Write the JSON data to a file
-	f, err := os.CreateTemp("/tmp", "diskModels")
+	f, err := os.CreateTemp("/tmp", "diskVendors")
 	if err != nil {
 		return "", err
 	}

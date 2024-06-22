@@ -107,7 +107,7 @@ var (
 	// defaultDiskIOScoreStrategy is the default score strategy for disk io aware plugin
 	defaultDiskIOScoreStrategy string = "LeastAllocated"
 	// defaultDiskIOModelConfig is the default file path for model plugin configurations
-	defaultDiskIOModelConfig string = "/etc/kubernetes/diskModels.properties"
+	defaultDiskIOModelConfig string = "/etc/kubernetes/disk-config/diskVendors"
 )
 
 // SetDefaults_CoschedulingArgs sets the default parameters for Coscheduling plugin.

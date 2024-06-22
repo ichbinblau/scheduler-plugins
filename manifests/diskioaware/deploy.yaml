@@ -19,32 +19,28 @@ spec:
         tier: control-plane
         version: second
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
       serviceAccountName: diskio-aware-scheduler
       containers:
         - image: localhost:5000/scheduler-plugins/kube-scheduler:latest
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           command:
           - /bin/kube-scheduler
-          - --authentication-kubeconfig=/etc/kubernetes/scheduler.conf
-          - --authorization-kubeconfig=/etc/kubernetes/scheduler.conf
+          - --bind-address=127.0.0.1
           - --config=/etc/kubernetes/scheduler-config/scheduler-config.yaml
-          name: scheduler
+          name: diskio-aware-scheduler
           securityContext:
             privileged: false
           volumeMounts:
-          - mountPath: /etc/kubernetes/scheduler.conf
-            name: kubeconfig
-          - mountPath: /etc/kubernetes/
+          - mountPath: /etc/kubernetes/scheduler-config
             name: diskio-aware-scheduler-config-vol
+          - mountPath: /etc/kubernetes/disk-config
+            name: diskio-aware-scheduler-diskmodel-vol
       hostNetwork: false
       hostPID: false
       volumes:
-      - hostPath:
-          path: /etc/kubernetes/scheduler.conf
-          type: File
-        name: kubeconfig
       - configMap:
-          name: normalization-funcs
+          name: diskio-aware-scheduler-config
         name: diskio-aware-scheduler-config-vol
+      - configMap:
+          name: normalization-func
+        name: diskio-aware-scheduler-diskmodel-vol

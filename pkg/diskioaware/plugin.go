@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package diskioaware
 
 import (
@@ -88,7 +104,7 @@ func New(configuration runtime.Object, handle framework.Handle) (framework.Plugi
 		return nil, err
 	}
 
-	ratelimiter := workqueue.NewItemExponentialFailureRateLimiter(time.Second, 5*time.Second) // todo: load from config
+	ratelimiter := workqueue.NewItemExponentialFailureRateLimiter(time.Second, 5*time.Second)
 	resource.IoiContext, err = resource.NewContext(ratelimiter, args.NSWhiteList, handle)
 	if err != nil {
 		return nil, err
@@ -234,11 +250,8 @@ func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, po
 func (ps *DiskIO) EventsToRegister() []framework.ClusterEvent {
 	// To register a custom event, follow the naming convention at:
 	// https://git.k8s.io/kubernetes/pkg/scheduler/eventhandlers.go#L410-L422
-
-	// todo: change action type
 	ce := []framework.ClusterEvent{
 		{Resource: framework.Pod, ActionType: framework.All},
-		// {Resource: framework.Node, ActionType: framework.Delete | framework.UpdateNodeLabel},
 		{Resource: framework.GVK(fmt.Sprintf("nodediskdevices.v1alpha1.%v", scheduling.GroupName)), ActionType: framework.Add | framework.Delete},
 		{Resource: framework.GVK(fmt.Sprintf("nodediskiostatses.v1alpha1.%v", scheduling.GroupName)), ActionType: framework.Update},
 	}
