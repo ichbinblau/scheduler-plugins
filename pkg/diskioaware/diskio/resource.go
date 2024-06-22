@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package diskio
 
 import (
@@ -58,10 +74,12 @@ func (ps *Resource) AddPod(pod *v1.Pod, request v1alpha1.IOBandwidth) error {
 }
 
 func (ps *Resource) RemovePod(pod *v1.Pod) error {
+	resource.IoiContext.Lock()
 	request, err := resource.IoiContext.GetPodRequest(string(pod.UID))
 	if err != nil {
 		return fmt.Errorf("cannot get pod request: %v", err)
 	}
+	resource.IoiContext.Unlock()
 	ps.Lock()
 	defer ps.Unlock()
 	dev := ps.info.DefaultDevice
@@ -76,14 +94,15 @@ func (ps *Resource) RemovePod(pod *v1.Pod) error {
 
 func (ps *Resource) PrintInfo() {
 	for disk, diskInfo := range ps.info.DisksStatus {
-		klog.Info("***device: ", disk, " ***")
-		klog.Info("device name: ", diskInfo.DiskName)
-		klog.Info("normalizer name: ", diskInfo.NormalizerName)
-		klog.Info("capacity read: ", diskInfo.Capacity.Read.String())
-		klog.Info("capacity write: ", diskInfo.Capacity.Write.String())
-		klog.Info("capacity total: ", diskInfo.Capacity.Total.String())
-		klog.Info("allocatable read: ", diskInfo.Allocatable.Read.String())
-		klog.Info("allocatable write: ", diskInfo.Allocatable.Write.String())
-		klog.Info("allocatable total: ", diskInfo.Allocatable.Total.String())
+		klog.V(6).Info("***device: ", disk, " ***")
+		klog.V(6).Info("device name: ", diskInfo.DiskName)
+		klog.V(6).Info("normalizer name: ", diskInfo.NormalizerName)
+		klog.V(6).Info("capacity read: ", diskInfo.Capacity.Read.String())
+		klog.V(6).Info("capacity write: ", diskInfo.Capacity.Write.String())
+		klog.V(6).Info("capacity total: ", diskInfo.Capacity.Total.String())
+		klog.V(6).Info("allocatable read: ", diskInfo.Allocatable.Read.String())
+		klog.V(6).Info("allocatable read: ", diskInfo.Allocatable.Read.String())
+		klog.V(6).Info("allocatable write: ", diskInfo.Allocatable.Write.String())
+		klog.V(6).Info("allocatable total: ", diskInfo.Allocatable.Total.String())
 	}
 }

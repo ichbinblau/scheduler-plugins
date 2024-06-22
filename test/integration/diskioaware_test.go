@@ -133,8 +133,6 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 		t.Errorf("can't list nodes: %s", err.Error())
 	}
 
-	// t.Logf("NodeList: %v", nodeList)
-
 	nodeDiskInfo1 := MakeNodeDiskDevice(common.CRNameSpace, fmt.Sprintf("%s-%s", nodes[0], common.NodeDiskDeviceCRSuffix)).Spec(
 		diskiov1alpha1.NodeDiskDeviceSpec{
 			NodeName: nodes[0],
@@ -180,7 +178,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 		expectedNodes    []string
 	}{
 		{
-			name: "Case1: enough BW to schedule two guaranteed pods",
+			name: "Case1: enough BW to schedule two guaranteed pods on node which support diskio",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
 					common.DiskIOAnnotation: "{\"rbps\": \"30Mi\", \"wbps\": \"20Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
@@ -198,7 +196,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			expectedNodes: []string{"fake-node-1"},
 		},
 		{
-			name: "Case2: enough BW to schedule two best effort pods to node not support diskioaware",
+			name: "Case2: enough BW to schedule two best-effort pods on nodes which do not support diskio",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{}).Container(pause).Obj(),
 				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{}).Container(pause).Obj(),
@@ -213,7 +211,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			expectedNodes: []string{"fake-node-2"},
 		},
 		{
-			name: "Case3: enough BW to schedule two best effort pods to node support diskioaware",
+			name: "Case3: enough BW to schedule two best effort pods on nodes which support diskio",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{}).Container(pause).Obj(),
 				st.MakePod().Namespace(ns).Name("pod2").Annotations(map[string]string{}).Container(pause).Obj(),
@@ -229,7 +227,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			expectedNodes: []string{"fake-node-1", "fake-node-2"},
 		},
 		{
-			name: "Case4: not enough BW to schedule two guaranteed pods to node support diskioaware",
+			name: "Case4: not enough BW to schedule two guaranteed pods on a node which supports diskio",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
 					common.DiskIOAnnotation: "{\"rbps\": \"2000Mi\", \"wbps\": \"2000Mi\", \"blocksize\": \"4k\"}"}).Container(pause).Obj(),
@@ -244,7 +242,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			expectedNodes: []string{},
 		},
 		{
-			name: "Case5: schedule two guaranteed pods, one pod success and one pod fail",
+			name: "Case5: schedule two guaranteed pods, one pod succeeds and one pod fails",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
 					common.DiskIOAnnotation: "{\"rbps\": \"1000Mi\", \"wbps\": \"1000Mi\", \"blocksize\": \"512\"}"}).Container(pause).Obj(),
@@ -259,7 +257,7 @@ func TestDiskIOAwarePlugin(t *testing.T) {
 			expectedNodes: []string{"fake-node-1"},
 		},
 		{
-			name: "Case6: schedule two guaranteed pods, but no node's disk io info is registed",
+			name: "Case6: schedule two guaranteed pods, but no node's disk io info is registered",
 			pods: []*v1.Pod{
 				st.MakePod().Namespace(ns).Name("pod1").Annotations(map[string]string{
 					common.DiskIOAnnotation: "{\"rbps\": \"10Mi\", \"wbps\": \"10Mi\", \"blocksize\": \"512\"}"}).Container(pause).Obj(),

@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package normalizer
 
 import (
@@ -16,7 +32,6 @@ import (
 )
 
 const (
-	// diskModelConfig = "/tmp/diskModels.properties" // todo: change it back
 	resyncDuration = 90 * time.Second
 )
 
@@ -50,8 +65,8 @@ func (pm *NormalizerManager) Run(ctx context.Context, diskModelConfig string, wo
 	defer pm.queue.ShutDown()
 
 	logger := klog.FromContext(ctx)
-	logger.Info("Starting normalizer manager")
-	defer logger.Info("Shutting down normalizer manager")
+	logger.V(5).Info("Starting normalizer manager")
+	defer logger.V(5).Info("Shutting down normalizer manager")
 
 	var periodJob = func(context.Context) {
 		data, err := os.ReadFile(diskModelConfig)
@@ -109,7 +124,7 @@ func (pm *NormalizerManager) processNextWorkItem(ctx context.Context) bool {
 func (pm *NormalizerManager) LoadPlugin(ctx context.Context, p PlConfig) error {
 	// use Vendor+Model as key,
 	key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
-	klog.Infof("Loading plugin %s", key)
+	klog.V(5).Infof("Loading plugin %s", key)
 	norm, err := pm.loader.LoadPlugin(ctx, p)
 	if err != nil {
 		return err
@@ -117,7 +132,7 @@ func (pm *NormalizerManager) LoadPlugin(ctx context.Context, p PlConfig) error {
 
 	// normalizer functions as value
 	pm.store.Set(key, norm)
-	klog.Infof("Plugin %s is loaded", key)
+	klog.V(5).Infof("Plugin %s is loaded", key)
 	return nil
 }
 
@@ -136,8 +151,8 @@ func (pm *NormalizerManager) UnloadPlugin(name string) error {
 
 // GetPlugin implements the interface method
 func (pm *NormalizerManager) GetNormalizer(name string) (Normalize, error) {
-	pm.Lock()
-	defer pm.Unlock()
+	pm.RLock()
+	defer pm.RUnlock()
 	exec, err := pm.store.Get(name)
 	if err != nil {
 		return nil, err

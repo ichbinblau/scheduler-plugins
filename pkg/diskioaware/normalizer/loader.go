@@ -1,3 +1,19 @@
+/*
+Copyright 2024 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package normalizer
 
 import (
@@ -10,14 +26,8 @@ import (
 	"path/filepath"
 	"plugin"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
-)
-
-const (
-	defaultMaxRetry = 1
-	defaultTimeout  = 360 * time.Second
 )
 
 type PluginLoader struct {
@@ -37,7 +47,7 @@ func (pl *PluginLoader) getFilePath(p PlConfig) string {
 }
 
 func (pl *PluginLoader) loadPlugin(ctx context.Context, p PlConfig) (string, error) {
-	klog.Infof("Loading plugin %s-%s.so from %s\n", p.Vendor, p.Model, p.URL)
+	klog.V(5).Infof("Loading plugin %s-%s.so from %s\n", p.Vendor, p.Model, p.URL)
 
 	firstColon := strings.IndexByte(p.URL, ':')
 	if firstColon == -1 {
@@ -109,13 +119,13 @@ func (pl *PluginLoader) LoadPlugin(ctx context.Context, p PlConfig) (Normalize, 
 	// load the plugin
 	plugin, err := plugin.Open(dst)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load plugin: %v", err)
+		return nil, fmt.Errorf("load plugin error: %v", err)
 	}
 
 	// find symbol
 	normSym, err := plugin.Lookup("Normalizer")
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup Normalizer symbol: %v", err)
+		return nil, fmt.Errorf("lookup Normalizer symbol error: %v", err)
 	}
 
 	// get the normalizer class
