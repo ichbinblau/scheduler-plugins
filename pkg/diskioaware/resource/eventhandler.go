@@ -221,7 +221,7 @@ func (ps *IOEventHandler) UpdateNodeDiskIOStats(oldObj, newObj interface{}) {
 		klog.Errorf("[UpdateNodeDiskIOStats]cannot convert to *v1alpha1.NodeDiskIOStats: %v", newObj)
 		return
 	}
-	if utils.HashObject(old.Status) == utils.HashObject(new.Status) || new.Status.ObservedGeneration != &new.Generation {
+	if utils.HashObject(old.Status) == utils.HashObject(new.Status) || *new.Status.ObservedGeneration != new.Generation {
 		return
 	}
 	err := ps.cache.(CacheHandle).UpdateCacheNodeStatus(new.Spec.NodeName, new.Status)

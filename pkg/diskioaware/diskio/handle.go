@@ -89,18 +89,21 @@ func (h *Handle) DeleteCacheNodeInfo(nodeName string) error {
 	return nil
 }
 func (h *Handle) UpdateCacheNodeStatus(nodeName string, nodeIoBw v1alpha1.NodeDiskIOStatsStatus) error {
+	klog.Info("enter handle UpdateCacheNodeStatus")
 	h.RLock()
-	defer h.RUnlock()
 	rs := h.EC.GetExtendedResource(nodeName)
 	if rs == nil {
 		return fmt.Errorf("node not registered in cache")
 	}
+	h.RUnlock()
+
 	r, ok := rs.(*Resource)
 	if !ok {
 		return fmt.Errorf("incorrect resource cached")
 	}
 	r.Lock()
 	defer r.Unlock()
+	klog.Infof("nodeIoBw.AllocatableBandwidth %v", nodeIoBw.AllocatableBandwidth)
 	for dev, bw := range nodeIoBw.AllocatableBandwidth {
 		r.info.DisksStatus[dev].Allocatable = v1alpha1.IOBandwidth{
 			Read:  bw.Read.DeepCopy(),
@@ -120,12 +123,13 @@ func (h *Handle) IsIORequired(annotations map[string]string) bool {
 }
 func (h *Handle) CanAdmitPod(nodeName string, req v1alpha1.IOBandwidth) (bool, error) {
 	h.RLock()
-	defer h.RUnlock()
 	rs := h.EC.GetExtendedResource(nodeName)
 	if rs == nil {
 		klog.Errorf("node %v not registered in cache", nodeName)
 		return false, fmt.Errorf("node %v not registered in cache", nodeName)
 	}
+	h.RUnlock()
+
 	r, ok := rs.(*Resource)
 	if !ok {
 		klog.Error("incorrect resource cached")
@@ -151,12 +155,13 @@ func (h *Handle) CanAdmitPod(nodeName string, req v1alpha1.IOBandwidth) (bool, e
 
 func (h *Handle) NodePressureRatio(node string, request v1alpha1.IOBandwidth) (float64, error) {
 	h.RLock()
-	defer h.RUnlock()
 	rs := h.EC.GetExtendedResource(node)
 	if rs == nil {
 		klog.Errorf("node %v not registered in cache", node)
 		return 0, fmt.Errorf("node %v not registered in cache", node)
 	}
+	h.RUnlock()
+
 	r, ok := rs.(*Resource)
 	if !ok {
 		klog.Error("incorrect resource cached")
@@ -178,12 +183,12 @@ func (h *Handle) NodePressureRatio(node string, request v1alpha1.IOBandwidth) (f
 
 func (h *Handle) GetDiskNormalizeModel(node string) (string, error) {
 	h.RLock()
-	defer h.RUnlock()
 	rs := h.EC.GetExtendedResource(node)
 	if rs == nil {
 		klog.Errorf("node %v not registered in cache", node)
 		return "", fmt.Errorf("node %v not registered in cache", node)
 	}
+	h.RUnlock()
 	r, ok := rs.(*Resource)
 	if !ok {
 		klog.Error("incorrect resource cached")

@@ -124,7 +124,7 @@ func (pm *NormalizerManager) processNextWorkItem(ctx context.Context) bool {
 func (pm *NormalizerManager) LoadPlugin(ctx context.Context, p PlConfig) error {
 	// use Vendor+Model as key,
 	key := fmt.Sprintf("%s-%s", p.Vendor, p.Model)
-	klog.V(5).Infof("Loading plugin %s", key)
+	klog.V(2).Infof("Loading plugin %s", key)
 	norm, err := pm.loader.LoadPlugin(ctx, p)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (pm *NormalizerManager) LoadPlugin(ctx context.Context, p PlConfig) error {
 
 	// normalizer functions as value
 	pm.store.Set(key, norm)
-	klog.V(5).Infof("Plugin %s is loaded", key)
+	klog.V(2).Infof("Plugin %s is loaded", key)
 	return nil
 }
 

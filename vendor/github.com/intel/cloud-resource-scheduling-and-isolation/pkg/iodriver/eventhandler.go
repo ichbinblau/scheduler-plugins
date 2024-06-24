@@ -1,3 +1,19 @@
+/*
+Copyright 2024 Intel Corporation
+
+Licensed under the Apache License, Version 2.0 (the License);
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package iodriver
 
 import (
@@ -112,7 +128,10 @@ func (c *IODriver) processDiskCrData(data *v1alpha1.NodeDiskIOStats) error {
 			if !ok {
 				ioAnn = ""
 			}
-			bw, _ := EstimateRequest(ioAnn)
+			bw, err := EstimateRequest(ioAnn)
+			if err != nil {
+				return err
+			}
 			c.podCrInfos[podId] = &PodCrInfo{
 				devId: c.diskInfos.EmptyDir,
 				bw:    bw,
@@ -241,10 +260,6 @@ func (e *IODriver) getRealtimeDiskAllocable(diskId string) *v1alpha1.IOBandwidth
 		return nil
 	}
 	if e.burstUp {
-		bw.Total.Add(MinDefaultTotalIOBW)
-		bw.Write.Add(MinDefaultIOBW)
-		bw.Read.Add(MinDefaultIOBW)
-	} else {
 		bw.Total.Sub(MinDefaultTotalIOBW)
 		bw.Write.Sub(MinDefaultIOBW)
 		bw.Read.Sub(MinDefaultIOBW)

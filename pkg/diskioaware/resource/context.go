@@ -156,7 +156,8 @@ func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1
 	if err != nil {
 		return fmt.Errorf("get reserved pods error: %v", err)
 	}
-	pl = append(pl, fmt.Sprintf("%s-%s", pod.Name, pod.UID))
+	// pl = append(pl, fmt.Sprintf("%s-%s", pod.Name, pod.UID))
+	pl = append(pl, string(pod.UID))
 	c.SetPodRequests(string(pod.UID), bw)
 	c.SetReservedPods(nodeName, pl)
 	c.queue.Add(&SyncContext{Node: nodeName})
@@ -171,7 +172,7 @@ func (c *ResourceIOContext) RemovePod(pod *corev1.Pod, nodeName string) error {
 		return fmt.Errorf("get reserved pods error: %v", err)
 	}
 	for i, p := range v {
-		if p == fmt.Sprintf("%s-%s", pod.Name, pod.UID) {
+		if p == string(pod.UID) {
 			v = append(v[:i], v[i+1:]...)
 			break
 		}

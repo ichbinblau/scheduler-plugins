@@ -70,12 +70,11 @@ func (d *stateData) Clone() framework.StateData {
 }
 
 // New initializes a new plugin and returns it.
-func New(configuration runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+func New(ctx context.Context, configuration runtime.Object, handle framework.Handle) (framework.Plugin, error) {
 	d := &DiskIO{
 		rh:         diskio.New(),
 		nodeLister: handle.SharedInformerFactory().Core().V1().Nodes().Lister(),
 	}
-	ctx := context.Background()
 	args, ok := configuration.(*config.DiskIOArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type DiskIOArgs, got %T", args)
@@ -133,6 +132,7 @@ func (ps *DiskIO) Name() string {
 // Checks if a node has sufficient resources, such as cpu, memory, gpu, opaque int resources etc to run a pod.
 // It returns a list of insufficient resources, if empty, then the node has all the resources requested by the pod.
 func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	klog.Info("enter filter")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.NewStatus(framework.Success)
 	}
@@ -174,6 +174,7 @@ func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 // Score invoked at the score extension point.
 func (ps *DiskIO) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+	klog.Info("enter score")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.MaxNodeScore, framework.NewStatus(framework.Success)
 	}
@@ -203,6 +204,7 @@ func (ps *DiskIO) ScoreExtensions() framework.ScoreExtensions {
 
 // Reserve is the functions invoked by the framework at "reserve" extension point.
 func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
+	klog.Info("enter reserve")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.NewStatus(framework.Success, "")
 	}
@@ -228,6 +230,7 @@ func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod 
 }
 
 func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
+	klog.Info("enter unreserve")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return
 	}
@@ -275,7 +278,7 @@ func clearStateData(state *framework.CycleState, nodeLister corelisters.NodeList
 	// delete all cycle states for all nodes
 	nodes, err := nodeLister.List(labels.Everything())
 	if err != nil {
-		klog.Errorf("Get nodes error:", err)
+		klog.Errorf("Get nodes error: %v", err)
 	}
 	for _, node := range nodes {
 		deleteStateData(state, stateKeyPrefix+node.Name)
