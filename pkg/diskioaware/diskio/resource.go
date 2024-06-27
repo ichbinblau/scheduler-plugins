@@ -22,13 +22,14 @@ import (
 
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	v1 "k8s.io/api/core/v1"
+	res "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
 )
 
 type NodeInfo struct {
-	DisksStatus   map[string]*DiskInfo // disk device uuid : diskStatus
-	DefaultDevice string               // disk device uuid
+	DisksStatus   map[string]*DiskInfo // key is disk device id and the value is diskStatus
+	DefaultDevice string               // key is disk device id
 }
 
 type DiskInfo struct {
@@ -67,9 +68,21 @@ func (ps *Resource) AddPod(pod *v1.Pod, request v1alpha1.IOBandwidth) error {
 	if _, ok := ps.info.DisksStatus[dev]; !ok {
 		return fmt.Errorf("cannot find default device %s in cache", dev)
 	}
-	ps.info.DisksStatus[dev].Allocatable.Read.Sub(request.Read)
-	ps.info.DisksStatus[dev].Allocatable.Write.Sub(request.Write)
-	ps.info.DisksStatus[dev].Allocatable.Total.Sub(request.Total)
+	if ps.info.DisksStatus[dev].Allocatable.Read.Cmp(request.Read) < 0 {
+		ps.info.DisksStatus[dev].Allocatable.Read = res.MustParse("0")
+	} else {
+		ps.info.DisksStatus[dev].Allocatable.Read.Sub(request.Read)
+	}
+	if ps.info.DisksStatus[dev].Allocatable.Write.Cmp(request.Write) < 0 {
+		ps.info.DisksStatus[dev].Allocatable.Write = res.MustParse("0")
+	} else {
+		ps.info.DisksStatus[dev].Allocatable.Write.Sub(request.Write)
+	}
+	if ps.info.DisksStatus[dev].Allocatable.Total.Cmp(request.Total) < 0 {
+		ps.info.DisksStatus[dev].Allocatable.Total = res.MustParse("0")
+	} else {
+		ps.info.DisksStatus[dev].Allocatable.Total.Sub(request.Total)
+	}
 	return nil
 }
 
@@ -87,30 +100,30 @@ func (ps *Resource) RemovePod(pod *v1.Pod) error {
 		return fmt.Errorf("cannot find default device %s in cache", dev)
 	}
 	ps.info.DisksStatus[dev].Allocatable.Read.Add(request.Read)
+	if ps.info.DisksStatus[dev].Allocatable.Read.Cmp(ps.info.DisksStatus[dev].Capacity.Read) > 0 {
+		ps.info.DisksStatus[dev].Allocatable.Read = ps.info.DisksStatus[dev].Capacity.Read
+	}
 	ps.info.DisksStatus[dev].Allocatable.Write.Add(request.Write)
+	if ps.info.DisksStatus[dev].Allocatable.Write.Cmp(ps.info.DisksStatus[dev].Capacity.Write) > 0 {
+		ps.info.DisksStatus[dev].Allocatable.Write = ps.info.DisksStatus[dev].Capacity.Write
+	}
 	ps.info.DisksStatus[dev].Allocatable.Total.Add(request.Total)
+	if ps.info.DisksStatus[dev].Allocatable.Total.Cmp(ps.info.DisksStatus[dev].Capacity.Total) > 0 {
+		ps.info.DisksStatus[dev].Allocatable.Total = ps.info.DisksStatus[dev].Capacity.Total
+	}
 	return nil
 }
 
 func (ps *Resource) PrintInfo() {
 	for disk, diskInfo := range ps.info.DisksStatus {
-		// klog.V(6).Info("***device: ", disk, " ***")
-		// klog.V(6).Info("device name: ", diskInfo.DiskName)
-		// klog.V(6).Info("normalizer name: ", diskInfo.NormalizerName)
-		// klog.V(6).Info("capacity read: ", diskInfo.Capacity.Read.String())
-		// klog.V(6).Info("capacity write: ", diskInfo.Capacity.Write.String())
-		// klog.V(6).Info("capacity total: ", diskInfo.Capacity.Total.String())
-		// klog.V(6).Info("allocatable read: ", diskInfo.Allocatable.Read.String())
-		// klog.V(6).Info("allocatable write: ", diskInfo.Allocatable.Write.String())
-		// klog.V(6).Info("allocatable total: ", diskInfo.Allocatable.Total.String())
-		klog.Info("***device: ", disk, " ***")
-		klog.Info("device name: ", diskInfo.DiskName)
-		klog.Info("normalizer name: ", diskInfo.NormalizerName)
-		klog.Info("capacity read: ", diskInfo.Capacity.Read.String())
-		klog.Info("capacity write: ", diskInfo.Capacity.Write.String())
-		klog.Info("capacity total: ", diskInfo.Capacity.Total.String())
-		klog.Info("allocatable read: ", diskInfo.Allocatable.Read.String())
-		klog.Info("allocatable write: ", diskInfo.Allocatable.Write.String())
-		klog.Info("allocatable total: ", diskInfo.Allocatable.Total.String())
+		klog.V(2).Info("device id: ", disk)
+		klog.V(2).Info("device name: ", diskInfo.DiskName)
+		klog.V(2).Info("normalizer name: ", diskInfo.NormalizerName)
+		klog.V(2).Info("capacity read: ", diskInfo.Capacity.Read.String())
+		klog.V(2).Info("capacity write: ", diskInfo.Capacity.Write.String())
+		klog.V(2).Info("capacity total: ", diskInfo.Capacity.Total.String())
+		klog.V(2).Info("allocatable read: ", diskInfo.Allocatable.Read.String())
+		klog.V(2).Info("allocatable write: ", diskInfo.Allocatable.Write.String())
+		klog.V(2).Info("allocatable total: ", diskInfo.Allocatable.Total.String())
 	}
 }

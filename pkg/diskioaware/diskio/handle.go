@@ -23,7 +23,6 @@ import (
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	common "github.com/intel/cloud-resource-scheduling-and-isolation/pkg/iodriver"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
 )
 
@@ -89,21 +88,12 @@ func (h *Handle) DeleteCacheNodeInfo(nodeName string) error {
 	return nil
 }
 func (h *Handle) UpdateCacheNodeStatus(nodeName string, nodeIoBw v1alpha1.NodeDiskIOStatsStatus) error {
-	klog.Info("enter handle UpdateCacheNodeStatus")
-	h.RLock()
-	rs := h.EC.GetExtendedResource(nodeName)
-	if rs == nil {
-		return fmt.Errorf("node not registered in cache")
-	}
-	h.RUnlock()
-
-	r, ok := rs.(*Resource)
-	if !ok {
-		return fmt.Errorf("incorrect resource cached")
+	r, err := h.getResource(nodeName)
+	if err != nil {
+		return err
 	}
 	r.Lock()
 	defer r.Unlock()
-	klog.Infof("nodeIoBw.AllocatableBandwidth %v", nodeIoBw.AllocatableBandwidth)
 	for dev, bw := range nodeIoBw.AllocatableBandwidth {
 		r.info.DisksStatus[dev].Allocatable = v1alpha1.IOBandwidth{
 			Read:  bw.Read.DeepCopy(),
@@ -122,56 +112,38 @@ func (h *Handle) IsIORequired(annotations map[string]string) bool {
 
 }
 func (h *Handle) CanAdmitPod(nodeName string, req v1alpha1.IOBandwidth) (bool, error) {
-	h.RLock()
-	rs := h.EC.GetExtendedResource(nodeName)
-	if rs == nil {
-		klog.Errorf("node %v not registered in cache", nodeName)
-		return false, fmt.Errorf("node %v not registered in cache", nodeName)
-	}
-	h.RUnlock()
-
-	r, ok := rs.(*Resource)
-	if !ok {
-		klog.Error("incorrect resource cached")
-		return false, fmt.Errorf("incorrect resource cached")
+	r, err := h.getResource(nodeName)
+	if err != nil {
+		return false, err
 	}
 	r.Lock()
 	defer r.Unlock()
 	dev := r.info.DefaultDevice
 	if _, ok := r.info.DisksStatus[dev]; !ok {
-		return false, fmt.Errorf("emptydir disk %v not registered in cache", dev)
+		return false, fmt.Errorf("emptydir disk %v has not been registered in cache", dev)
 	}
 	if r.info.DisksStatus[dev].Allocatable.Read.Cmp(req.Read) < 0 {
-		return false, fmt.Errorf("node %v disk IO read bandwidth not enough", nodeName)
+		return false, fmt.Errorf("node %v disk IO read bandwidth is not enough", nodeName)
 	}
 	if r.info.DisksStatus[dev].Allocatable.Write.Cmp(req.Write) < 0 {
-		return false, fmt.Errorf("node %v disk IO write bandwidth not enough", nodeName)
+		return false, fmt.Errorf("node %v disk IO write bandwidth is not enough", nodeName)
 	}
 	if r.info.DisksStatus[dev].Allocatable.Total.Cmp(req.Total) < 0 {
-		return false, fmt.Errorf("node %v disk IO total bandwidth not enough", nodeName)
+		return false, fmt.Errorf("node %v disk IO total bandwidth is not enough", nodeName)
 	}
 	return true, nil
 }
 
 func (h *Handle) NodePressureRatio(node string, request v1alpha1.IOBandwidth) (float64, error) {
-	h.RLock()
-	rs := h.EC.GetExtendedResource(node)
-	if rs == nil {
-		klog.Errorf("node %v not registered in cache", node)
-		return 0, fmt.Errorf("node %v not registered in cache", node)
-	}
-	h.RUnlock()
-
-	r, ok := rs.(*Resource)
-	if !ok {
-		klog.Error("incorrect resource cached")
-		return 0, fmt.Errorf("incorrect resource cached")
+	r, err := h.getResource(node)
+	if err != nil {
+		return 0, err
 	}
 	r.Lock()
 	defer r.Unlock()
 	dev := r.info.DefaultDevice
 	if _, ok := r.info.DisksStatus[dev]; !ok {
-		return 0, fmt.Errorf("emptydir disk %v not registered in cache", dev)
+		return 0, fmt.Errorf("emptydir disk %v has not been registered in cache", dev)
 	}
 
 	rAllocatable := r.info.DisksStatus[dev].Allocatable.Read.AsApproximateFloat64()
@@ -182,21 +154,27 @@ func (h *Handle) NodePressureRatio(node string, request v1alpha1.IOBandwidth) (f
 }
 
 func (h *Handle) GetDiskNormalizeModel(node string) (string, error) {
-	h.RLock()
-	rs := h.EC.GetExtendedResource(node)
-	if rs == nil {
-		klog.Errorf("node %v not registered in cache", node)
-		return "", fmt.Errorf("node %v not registered in cache", node)
-	}
-	h.RUnlock()
-	r, ok := rs.(*Resource)
-	if !ok {
-		klog.Error("incorrect resource cached")
-		return "", fmt.Errorf("incorrect resource cached")
+	r, err := h.getResource(node)
+	if err != nil {
+		return "", err
 	}
 	dev := r.info.DefaultDevice
 	if _, ok := r.info.DisksStatus[dev]; !ok {
 		return "", fmt.Errorf("emptydir disk %v not registered in cache", dev)
 	}
 	return r.info.DisksStatus[dev].NormalizerName, nil
+}
+
+func (h *Handle) getResource(node string) (*Resource, error) {
+	h.RLock()
+	rs := h.EC.GetExtendedResource(node)
+	if rs == nil {
+		return nil, fmt.Errorf("node %v has not been registered in cache", node)
+	}
+	h.RUnlock()
+	r, ok := rs.(*Resource)
+	if !ok {
+		return nil, fmt.Errorf("incorrect resource cached")
+	}
+	return r, nil
 }

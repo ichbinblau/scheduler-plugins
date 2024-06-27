@@ -86,7 +86,6 @@ func New(ctx context.Context, configuration runtime.Object, handle framework.Han
 	}
 
 	// load disk vendor normalize functions
-	// watch configmap with version
 	d.nm = normalizer.NewNormalizerManager(baseModelDir, maxRetries)
 	go d.nm.Run(ctx, args.DiskIOModelConfig, workers)
 
@@ -129,10 +128,7 @@ func (ps *DiskIO) Name() string {
 }
 
 // Filter invoked at the filter extension point.
-// Checks if a node has sufficient resources, such as cpu, memory, gpu, opaque int resources etc to run a pod.
-// It returns a list of insufficient resources, if empty, then the node has all the resources requested by the pod.
 func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
-	klog.Info("enter filter")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.NewStatus(framework.Success)
 	}
@@ -174,7 +170,6 @@ func (ps *DiskIO) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 // Score invoked at the score extension point.
 func (ps *DiskIO) Score(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
-	klog.Info("enter score")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.MaxNodeScore, framework.NewStatus(framework.Success)
 	}
@@ -204,7 +199,6 @@ func (ps *DiskIO) ScoreExtensions() framework.ScoreExtensions {
 
 // Reserve is the functions invoked by the framework at "reserve" extension point.
 func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
-	klog.Info("enter reserve")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return framework.NewStatus(framework.Success, "")
 	}
@@ -230,7 +224,6 @@ func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod 
 }
 
 func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {
-	klog.Info("enter unreserve")
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
 		return
 	}
@@ -245,11 +238,6 @@ func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, po
 
 }
 
-// EventsToRegister returns the possible events that may make a Pod
-// failed by this plugin schedulable.
-// NOTE: if in-place-update (KEP 1287) gets implemented, then PodUpdate event
-// should be registered for this plugin since a Pod update may free up resources
-// that make other Pods schedulable.
 func (ps *DiskIO) EventsToRegister() []framework.ClusterEvent {
 	// To register a custom event, follow the naming convention at:
 	// https://git.k8s.io/kubernetes/pkg/scheduler/eventhandlers.go#L410-L422

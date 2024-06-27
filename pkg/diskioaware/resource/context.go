@@ -43,17 +43,24 @@ type SyncContext struct {
 }
 
 type ResourceIOContext struct {
-	VClient     versioned.Interface
-	Reservedpod map[string][]string             // nodename -> PodList
+	VClient versioned.Interface
+	// ReservedPod keeps the list of pods that are reserved on each node
+	// the key is node name and the value is a pod list
+	Reservedpod map[string][]string
+	// PodRequests tracks the normalized disk io bandwidth request for each pod
+	// the key is the pod uid and the value is the disk io bandwidth
 	PodRequests map[string]v1alpha1.IOBandwidth // poduid -> bw
+	// NsWhiteList keeps the list of namespaces that are exempt from disk io aware scheduling
 	NsWhiteList []string
 	queue       workqueue.RateLimitingInterface
-	// lastUpdatedGen map[string]int64
 	sync.Mutex
 }
 
 func NewContext(rl workqueue.RateLimiter, wl []string, h framework.Handle) (*ResourceIOContext, error) {
-	queue := workqueue.NewNamedRateLimitingQueue(rl, "ResourceIO plugin")
+	if rl == nil {
+		return nil, fmt.Errorf("rate limiter is nil")
+	}
+	queue := workqueue.NewNamedRateLimitingQueue(rl, "Disk IO aware plugin")
 	cfg := h.KubeConfig()
 	cfg.ContentType = "application/json"
 	c, err := versioned.NewForConfig(cfg)
@@ -66,11 +73,12 @@ func NewContext(rl workqueue.RateLimiter, wl []string, h framework.Handle) (*Res
 		NsWhiteList: wl,
 		VClient:     c,
 		queue:       queue,
-		// lastUpdatedGen: make(map[string]int64),
 	}, nil
 }
 
 func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
+	defer c.queue.ShutDown()
+
 	for {
 		obj, shutdown := c.queue.Get()
 		if shutdown {
@@ -80,7 +88,7 @@ func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
 			defer c.queue.Done(obj)
 
 			switch obj := obj.(type) {
-			case *SyncContext: // update Reserved Pods
+			case *SyncContext: // update Reserved Pod list to NodeDiskIOStats CR
 				pl, ok := c.Reservedpod[obj.Node]
 				if !ok {
 					return fmt.Errorf("node %v doesn't exist in reserved pod", obj.Node)
@@ -99,12 +107,14 @@ func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
 			c.queue.Forget(obj)
 		}
 	}
+	<-ctx.Done()
 }
 
-func (c *ResourceIOContext) GetNsWhiteList() []string {
-	return c.NsWhiteList
-}
+// func (c *ResourceIOContext) GetNsWhiteList() []string {
+// 	return c.NsWhiteList
+// }
 
+// assume lock is acquired
 func (c *ResourceIOContext) GetReservedPods(node string) ([]string, error) {
 	if v, ok := c.Reservedpod[node]; ok {
 		return v, nil
@@ -112,6 +122,7 @@ func (c *ResourceIOContext) GetReservedPods(node string) ([]string, error) {
 	return nil, fmt.Errorf("node %v doesn't exist in reserved pod", node)
 }
 
+// assume lock is acquired
 func (c *ResourceIOContext) GetPodRequest(pod string) (v1alpha1.IOBandwidth, error) {
 	if v, ok := c.PodRequests[pod]; ok {
 		return v, nil
@@ -119,10 +130,12 @@ func (c *ResourceIOContext) GetPodRequest(pod string) (v1alpha1.IOBandwidth, err
 	return v1alpha1.IOBandwidth{}, fmt.Errorf("node %v doesn't exist in podRequests", pod)
 }
 
+// assume lock is acquired
 func (c *ResourceIOContext) SetReservedPods(node string, pl []string) {
 	c.Reservedpod[node] = pl
 }
 
+// assume lock is acquired
 func (c *ResourceIOContext) SetPodRequests(podid string, req v1alpha1.IOBandwidth) {
 	c.PodRequests[podid] = v1alpha1.IOBandwidth{
 		Read:  req.Read.DeepCopy(),
@@ -131,14 +144,17 @@ func (c *ResourceIOContext) SetPodRequests(podid string, req v1alpha1.IOBandwidt
 	}
 }
 
+// assume lock is acquired
 func (c *ResourceIOContext) RemoveNode(node string) {
 	delete(c.Reservedpod, node)
 }
 
+// assume lock is acquired
 func (c *ResourceIOContext) removePodRequest(podid string) {
 	delete(c.PodRequests, podid)
 }
 
+// write once in initialization
 func (c *ResourceIOContext) InNamespaceWhiteList(ns string) bool {
 	for _, n := range c.NsWhiteList {
 		if ns == n {
@@ -148,6 +164,8 @@ func (c *ResourceIOContext) InNamespaceWhiteList(ns string) bool {
 	return false
 }
 
+// AddPod caches the normalized pod disk io request and the pod uid in the reserved pod list
+// It also updates the reserved pod list to NodeDiskIOStats CR
 func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1.IOBandwidth) error {
 	c.Lock()
 	defer c.Unlock()
@@ -156,7 +174,6 @@ func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1
 	if err != nil {
 		return fmt.Errorf("get reserved pods error: %v", err)
 	}
-	// pl = append(pl, fmt.Sprintf("%s-%s", pod.Name, pod.UID))
 	pl = append(pl, string(pod.UID))
 	c.SetPodRequests(string(pod.UID), bw)
 	c.SetReservedPods(nodeName, pl)
@@ -164,6 +181,8 @@ func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1
 	return nil
 }
 
+// RemovePod removes the normalized pod disk io request and the pod from the reserved pod list in cache
+// It also updates the updated reserved pod list to NodeDiskIOStats CR
 func (c *ResourceIOContext) RemovePod(pod *corev1.Pod, nodeName string) error {
 	c.Lock()
 	defer c.Unlock()

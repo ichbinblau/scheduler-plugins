@@ -30,7 +30,6 @@ kubectl apply -f manifests/diskioaware/diskmodel-configmap.yaml
 ```
 Or update the disk model in `manifests/diskioaware/diskVendors` and load ConfigMap from file
 ``` shell
-kubectl create ns ioi-system
 kubectl create cm normalization-func --from-file manifests/diskioaware/diskVendors -n kube-system
 ```
 - Apply RBAC rules and CRDs for disk IO aware scheduler plugin
@@ -76,10 +75,11 @@ git clone https://github.com/intel/cloud-resource-scheduling-and-isolation.git
 cd cloud-resource-scheduling-and-isolation
 HTTPS_PROXY=<Your-Corperate-Proxy> REPO_HOST=<IMAGE REGISTRY> make image 
 REPO_HOST=<IMAGE REGISTRY> make push_image
+kubectl create ns ioi-system
 kubectl apply -f manifests/cluster_role.yaml
 kubectl apply -f manifests/daemonset.yaml
 ```
-- Scheduler pods with disk io request. The total/read/write disk IO capacity of the fake device reported by 
+- Scheduler pods with disk io request. The total/read/write disk IO capacity of the fake device reported by IO driver is 1000Mi/1000Mi/2000Mi and the coefficient is 1.0. When the pod below is scheduled, schedule a duplicate pod. The new pod will be in pending state due to the error "node xxx disk IO read bandwidth not enough. preemption: 0/1 nodes are available".  
 ``` yaml
 apiVersion: v1
 kind: Pod

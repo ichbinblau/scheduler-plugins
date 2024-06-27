@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"k8s.io/kubernetes/pkg/scheduler/framework"
+	"sigs.k8s.io/scheduler-plugins/apis/config"
 	"sigs.k8s.io/scheduler-plugins/pkg/diskioaware/resource"
 )
 
@@ -29,9 +30,9 @@ type Scorer interface {
 
 func getScorer(scoreStrategy string) (Scorer, error) {
 	switch scoreStrategy {
-	case "LeastAllocated":
+	case string(config.LeastAllocated):
 		return &LeastAllocatedScorer{}, nil
-	case "MostAllocated":
+	case string(config.MostAllocated):
 		return &MostAllocatedScorer{}, nil
 	default:
 		return nil, fmt.Errorf("unknown score strategy %v", scoreStrategy)
@@ -40,7 +41,6 @@ func getScorer(scoreStrategy string) (Scorer, error) {
 
 type MostAllocatedScorer struct{}
 
-// todo: change algorithm
 func (scorer *MostAllocatedScorer) Score(node string, state *stateData, rh resource.Handle) (int64, error) {
 	if !state.nodeSupportIOI {
 		return framework.MaxNodeScore, nil

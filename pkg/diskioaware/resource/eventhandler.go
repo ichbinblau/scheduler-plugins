@@ -108,7 +108,7 @@ func (ps *IOEventHandler) BuildEvtHandler(ctx context.Context, podInformer cache
 func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 	ndd, ok := obj.(*v1alpha1.NodeDiskDevice)
 	if !ok {
-		klog.Errorf("[AddDiskDevice]cannot convert obj to NodeDiskDevice: %v", obj)
+		klog.Errorf("[AddDiskDevice]cannot convert obj to *v1alpha1.NodeDiskDevice: %v", obj)
 		return
 	}
 	node := ndd.Spec.NodeName
@@ -118,7 +118,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 	ctx := context.Background()
 	namespaces, err := ps.nsLister.List(labels.Everything())
 	if err != nil {
-		klog.Errorf("get namespaces error: %v", err)
+		klog.Errorf("[AddDiskDevice]get namespaces error: %v", err)
 	}
 	IoiContext.Lock()
 	defer IoiContext.Unlock()
@@ -128,7 +128,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 		}
 		pods, err := ps.podLister.List(labels.Everything())
 		if err != nil {
-			klog.Errorf("get pods error: %v", err)
+			klog.Errorf("[AddDiskDevice]get pods error: %v", err)
 		}
 		for _, pod := range pods {
 			if pod.Spec.NodeName == node {
@@ -136,28 +136,28 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 				// use model to get request
 				model, err := ps.cache.(CacheHandle).GetDiskNormalizeModel(node)
 				if err != nil {
-					klog.Errorf("get disk normalize model error: %v", err)
+					klog.Errorf("[AddDiskDevice]get disk normalize model error: %v", err)
 					continue
 				}
 				normalizeFunc, err := ps.nm.GetNormalizer(model)
 				if err != nil {
-					klog.Errorf("get normalizer error: %v", err)
+					klog.Errorf("[AddDiskDevice]get normalizer error: %v", err)
 					continue
 				}
 				key := pod.Annotations[common.DiskIOAnnotation]
 				reqStr, err := normalizeFunc(key)
 				if err != nil {
-					klog.Errorf("normalize request error: %v", err)
+					klog.Errorf("[AddDiskDevice]normalize request error: %v", err)
 					continue
 				}
 				req, err := utils.RequestStrToQuantity(reqStr)
 				if err != nil {
-					klog.Errorf("request string to quantity error: %v", err)
+					klog.Errorf("[AddDiskDevice]request string to quantity error: %v", err)
 					continue
 				}
 				err = ps.cache.(CacheHandle).AddPod(pod, node, req)
 				if err != nil {
-					klog.Errorf("add pod error: %v", err)
+					klog.Errorf("[AddDiskDevice]add pod error: %v", err)
 					continue
 				}
 				IoiContext.SetPodRequests(string(pod.UID), req)
@@ -171,22 +171,21 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 		// CR not exist, create one
 		err := utils.CreateNodeIOStatus(ctx, ps.vClient, node, podLists)
 		if err != nil {
-			klog.Errorf("create CR error: %v", err)
+			klog.Errorf("[AddDiskDevice]create CR error: %v", err)
 		}
 	} else {
-		// todo: compare generation only
 		// CR exist, check pod list and update it
 		if utils.ComparePodList(sts.Spec.ReservedPods, podLists) && sts.Generation == *sts.Status.ObservedGeneration {
 			// update cache
 			err := ps.cache.(CacheHandle).UpdateCacheNodeStatus(node, sts.Status)
 			if err != nil {
-				klog.Errorf("update cache error: %v", err)
+				klog.Errorf("[AddDiskDevice]update cache error: %v", err)
 			}
 		} else {
 			// update CR
 			err := utils.UpdateNodeIOStatus(ctx, ps.vClient, node, podLists)
 			if err != nil {
-				klog.Errorf("update CR error: %v", err)
+				klog.Errorf("[AddDiskDevice]update CR error: %v", err)
 			}
 		}
 	}
@@ -200,14 +199,12 @@ func (ps *IOEventHandler) DeleteDiskDevice(obj interface{}) {
 	}
 	err := ps.cache.(CacheHandle).DeleteCacheNodeInfo(dd.Spec.NodeName)
 	if err != nil {
-		klog.Errorf("[DeleteNodeNetworkIOInfo]cannot convert to v1.NodeStaticIOInfo: %v", err.Error())
+		klog.Errorf("[DeleteDiskDevice]fail to delete nodeinfo: %v", err.Error())
 	}
 	ps.cache.(CacheHandle).PrintCacheInfo()
 	IoiContext.Lock()
 	defer IoiContext.Unlock()
-	if _, err := IoiContext.GetReservedPods(dd.Name); err == nil {
-		IoiContext.RemoveNode(dd.Name)
-	}
+	IoiContext.RemoveNode(dd.Spec.NodeName)
 }
 
 func (ps *IOEventHandler) UpdateNodeDiskIOStats(oldObj, newObj interface{}) {
@@ -226,7 +223,7 @@ func (ps *IOEventHandler) UpdateNodeDiskIOStats(oldObj, newObj interface{}) {
 	}
 	err := ps.cache.(CacheHandle).UpdateCacheNodeStatus(new.Spec.NodeName, new.Status)
 	if err != nil {
-		klog.Error("UpdateCacheNodeStatus error: ", err.Error())
+		klog.Error("[UpdateNodeDiskIOStats] error: ", err.Error())
 	}
 }
 
@@ -238,11 +235,11 @@ func (ps *IOEventHandler) DeletePod(obj interface{}) {
 	}
 	err := ps.cache.(CacheHandle).RemovePod(pod, pod.Spec.NodeName)
 	if err != nil {
-		klog.Error("Remove pod err: ", err)
+		klog.Error("[DeletePod] err: ", err)
 	}
 	ps.cache.(CacheHandle).PrintCacheInfo()
 	err = IoiContext.RemovePod(pod, pod.Spec.NodeName)
 	if err != nil {
-		klog.Errorf("fail to remove pod in ReservedPod: %v", err)
+		klog.Errorf("[DeletePod] fail to remove pod in ReservedPod: %v", err)
 	}
 }
