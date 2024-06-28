@@ -35,12 +35,12 @@ type CacheHandle interface {
 	UpdateCacheNodeStatus(string, v1alpha1.NodeDiskIOStatsStatus) error
 	IsIORequired(annotations map[string]string) bool
 	NodeRegistered(string) bool
-	AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBandwidth) error //?
-	RemovePod(*v1.Pod, string) error //?
+	AddPod(pod *v1.Pod, nodeName string, request v1alpha1.IOBandwidth) error
+	RemovePod(*v1.Pod, string) error
 	CanAdmitPod(string, v1alpha1.IOBandwidth) (bool, error)
 	NodePressureRatio(string, v1alpha1.IOBandwidth) (float64, error)
 	GetDiskNormalizeModel(string) (string, error)
-	PrintCacheInfo() //?
+	PrintCacheInfo()
 }
 
 type HandleBase struct {

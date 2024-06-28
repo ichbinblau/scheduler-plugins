@@ -18,6 +18,7 @@ package diskioaware
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -25,9 +26,12 @@ import (
 	"github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	rs "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
@@ -51,6 +55,25 @@ var s map[string]v1alpha1.DiskDevice = map[string]v1alpha1.DiskDevice{
 			Write: rs.MustParse("50Mi"),
 		},
 	},
+}
+
+func makeNode(cs kubernetes.Interface, node *v1.Node) (*v1.Node, error) {
+	return cs.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+}
+
+func makeNodes(cs kubernetes.Interface, prefix string, numNodes int) ([]*v1.Node, error) {
+	nodes := make([]*v1.Node, numNodes)
+	for i := 0; i < numNodes; i++ {
+		nodeName := fmt.Sprintf("%v-%d", prefix, i)
+		n := &v1.Node{}
+		n.SetName(nodeName)
+		node, err := makeNode(cs, n)
+		if err != nil {
+			return nodes[:], err
+		}
+		nodes[i] = node
+	}
+	return nodes[:], nil
 }
 
 func TestNew(t *testing.T) {
@@ -148,7 +171,7 @@ func TestDiskIO_Filter(t *testing.T) {
 	err = nm.LoadPlugin(context.TODO(), normalizer.PlConfig{
 		Vendor: "v1",
 		Model:  "m1",
-		URL:    "file://./sampleplugin/foo/foo.so.bk",
+		URL:    "file://./sampleplugin/foo/foo.so",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -433,6 +456,59 @@ func TestDiskIO_Unreserve(t *testing.T) {
 				rh: rh,
 			}
 			ps.Unreserve(tt.args.ctx, tt.args.state, tt.args.pod, tt.args.nodeName)
+		})
+	}
+}
+
+func TestDiskIO_ClearStateData(t *testing.T) {
+	type fields struct {
+		state  *framework.CycleState
+		lister corelisters.NodeLister
+	}
+
+	// create nodes
+	c := fake.NewSimpleClientset()
+	nodes, err := makeNodes(c, "N", 3)
+	if err != nil {
+		t.Fatal("failed to create node: ", err)
+	}
+	informerFactory := informers.NewSharedInformerFactory(c, 0)
+	stop := make(chan struct{})
+	defer close(stop)
+	informerFactory.Start(stop)
+	ninformer := informerFactory.Core().V1().Nodes()
+	informerFactory.WaitForCacheSync(stop)
+	for _, n := range nodes {
+		ninformer.Informer().GetIndexer().Add(n)
+	}
+
+	// add data in cycle state
+	cs := &framework.CycleState{}
+	for _, n := range nodes {
+		cs.Write(framework.StateKey(stateKeyPrefix+n.Name), &stateData{})
+	}
+
+	tests := []struct {
+		name   string
+		fields *fields
+	}{
+		{
+			name: "Remove state data for all nodes",
+			fields: &fields{
+				state:  cs,
+				lister: ninformer.Lister(),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearStateData(tt.fields.state, tt.fields.lister)
+			for _, n := range nodes {
+				got, err := getStateData(tt.fields.state, stateKeyPrefix+n.Name)
+				if got != nil {
+					t.Fatalf("failed to clear all nodes state data %v, err: %v", got, err)
+				}
+			}
 		})
 	}
 }

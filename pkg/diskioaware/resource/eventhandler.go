@@ -113,7 +113,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 	}
 	node := ndd.Spec.NodeName
 	ps.cache.(CacheHandle).AddCacheNodeInfo(node, ndd.Spec.Devices)
-	// fill reserved pod
+	// find reserved pods on the reported node
 	podLists := []string{}
 	ctx := context.Background()
 	namespaces, err := ps.nsLister.List(labels.Everything())
@@ -126,7 +126,7 @@ func (ps *IOEventHandler) AddDiskDevice(obj interface{}) {
 		if IoiContext.InNamespaceWhiteList(ns.Name) {
 			continue
 		}
-		pods, err := ps.podLister.List(labels.Everything())
+		pods, err := ps.podLister.Pods(ns.Name).List(labels.Everything())
 		if err != nil {
 			klog.Errorf("[AddDiskDevice]get pods error: %v", err)
 		}
