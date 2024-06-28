@@ -41,7 +41,7 @@ func TestResourceIOContext_AddPod(t *testing.T) {
 		Reservedpod map[string][]string
 		PodRequests map[string]v1alpha1.IOBandwidth
 		NsWhiteList []string
-		queue       workqueue.RateLimitingInterface
+		Queue       workqueue.RateLimitingInterface
 	}
 	type args struct {
 		pod      *corev1.Pod
@@ -63,7 +63,7 @@ func TestResourceIOContext_AddPod(t *testing.T) {
 					},
 				},
 				PodRequests: map[string]v1alpha1.IOBandwidth{},
-				queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
+				Queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
 			},
 			args: args{
 				pod: &corev1.Pod{
@@ -86,7 +86,7 @@ func TestResourceIOContext_AddPod(t *testing.T) {
 			fields: fields{
 				Reservedpod: map[string][]string{},
 				PodRequests: map[string]v1alpha1.IOBandwidth{},
-				queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
+				Queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
 			},
 			args: args{
 				pod: &corev1.Pod{
@@ -112,7 +112,7 @@ func TestResourceIOContext_AddPod(t *testing.T) {
 				Reservedpod: tt.fields.Reservedpod,
 				PodRequests: tt.fields.PodRequests,
 				NsWhiteList: tt.fields.NsWhiteList,
-				queue:       tt.fields.queue,
+				Queue:       tt.fields.Queue,
 			}
 			if err := c.AddPod(tt.args.pod, tt.args.nodeName, tt.args.bw); (err != nil) != tt.wantErr {
 				t.Errorf("ResourceIOContext.AddPod() error = %v, wantErr %v", err, tt.wantErr)
@@ -127,7 +127,7 @@ func TestResourceIOContext_RemovePod(t *testing.T) {
 		Reservedpod map[string][]string
 		PodRequests map[string]v1alpha1.IOBandwidth
 		NsWhiteList []string
-		queue       workqueue.RateLimitingInterface
+		Queue       workqueue.RateLimitingInterface
 	}
 	type args struct {
 		pod      *corev1.Pod
@@ -160,7 +160,7 @@ func TestResourceIOContext_RemovePod(t *testing.T) {
 						Write: resource.MustParse("500"),
 					},
 				},
-				queue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
+				Queue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
 			},
 			args: args{
 				pod: &corev1.Pod{
@@ -178,7 +178,7 @@ func TestResourceIOContext_RemovePod(t *testing.T) {
 			fields: fields{
 				Reservedpod: map[string][]string{},
 				PodRequests: map[string]v1alpha1.IOBandwidth{},
-				queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
+				Queue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "test"),
 			},
 			args: args{
 				pod: &corev1.Pod{
@@ -199,7 +199,7 @@ func TestResourceIOContext_RemovePod(t *testing.T) {
 				Reservedpod: tt.fields.Reservedpod,
 				PodRequests: tt.fields.PodRequests,
 				NsWhiteList: tt.fields.NsWhiteList,
-				queue:       tt.fields.queue,
+				Queue:       tt.fields.Queue,
 			}
 			if err := c.RemovePod(tt.args.pod, tt.args.nodeName); (err != nil) != tt.wantErr {
 				t.Errorf("ResourceIOContext.RemovePod() error = %v, wantErr %v", err, tt.wantErr)
@@ -255,7 +255,7 @@ func TestResourceIOContext_InNamespaceWhiteList(t *testing.T) {
 				Reservedpod: nil,
 				PodRequests: nil,
 				NsWhiteList: tt.fields.NsWhiteList,
-				queue:       nil,
+				Queue:       nil,
 			}
 			if got := c.InNamespaceWhiteList(tt.args.ns); got != tt.want {
 				t.Errorf("ResourceIOContext.InNamespaceWhiteList() = %v, want %v", got, tt.want)
@@ -312,7 +312,7 @@ func TestResourceIOContext_GetPodRequest(t *testing.T) {
 				Reservedpod: nil,
 				PodRequests: tt.fields.PodRequests,
 				NsWhiteList: nil,
-				queue:       nil,
+				Queue:       nil,
 			}
 			got, err := c.GetPodRequest(tt.args.pod)
 			if (err != nil) != tt.wantErr {
@@ -368,7 +368,7 @@ func TestResourceIOContext_RemoveNode(t *testing.T) {
 				Reservedpod: tt.fields.Reservedpod,
 				PodRequests: nil,
 				NsWhiteList: nil,
-				queue:       nil,
+				Queue:       nil,
 			}
 			c.RemoveNode(tt.args.node)
 			if _, err := c.GetReservedPods(tt.args.node); err == nil {
@@ -433,7 +433,7 @@ func TestNewContext(t *testing.T) {
 func TestResourceIOContext_RunWorkerQueue(t *testing.T) {
 	rateLimiter := workqueue.NewItemExponentialFailureRateLimiter(time.Second, 5*time.Second)
 	type fields struct {
-		queue workqueue.RateLimitingInterface
+		Queue workqueue.RateLimitingInterface
 	}
 	type args struct {
 		item *SyncContext
@@ -446,7 +446,7 @@ func TestResourceIOContext_RunWorkerQueue(t *testing.T) {
 		{
 			name: "success",
 			fields: fields{
-				queue: workqueue.NewNamedRateLimitingQueue(rateLimiter, "test"),
+				Queue: workqueue.NewNamedRateLimitingQueue(rateLimiter, "test"),
 			},
 			args: args{
 				item: &SyncContext{
@@ -460,10 +460,10 @@ func TestResourceIOContext_RunWorkerQueue(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 			c := &ResourceIOContext{
-				queue: tt.fields.queue,
+				Queue: tt.fields.Queue,
 			}
 			go c.RunWorkerQueue(ctx)
-			c.queue.Add(tt.args.item)
+			c.Queue.Add(tt.args.item)
 			<-ctx.Done()
 		})
 	}

@@ -68,7 +68,7 @@ func TestIOEventHandler_DeletePod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			IoiContext = &ResourceIOContext{
 				Reservedpod: tt.fields.reservedPods,
-				queue:       workqueue.NewNamedRateLimitingQueue(rl, "test"),
+				Queue:       workqueue.NewNamedRateLimitingQueue(rl, "test"),
 			}
 			var gotRemovePod *corev1.Pod
 			fh := &FakeHandle{}

@@ -200,14 +200,14 @@ func (ps *DiskIO) ScoreExtensions() framework.ScoreExtensions {
 // Reserve is the functions invoked by the framework at "reserve" extension point.
 func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
 	if resource.IoiContext.InNamespaceWhiteList(pod.Namespace) {
-		return framework.NewStatus(framework.Success, "")
+		return framework.NewStatus(framework.Success)
 	}
 	sd, err := getStateData(state, stateKeyPrefix+nodeName)
 	if err != nil {
 		return framework.NewStatus(framework.Unschedulable, err.Error())
 	}
 	if !sd.nodeSupportIOI {
-		return framework.NewStatus(framework.Success, "")
+		return framework.NewStatus(framework.Success)
 	}
 	err = ps.rh.(resource.CacheHandle).AddPod(pod, nodeName, sd.request)
 	if err != nil {
@@ -220,7 +220,7 @@ func (ps *DiskIO) Reserve(ctx context.Context, state *framework.CycleState, pod 
 	if err != nil {
 		return framework.NewStatus(framework.Unschedulable, err.Error())
 	}
-	return framework.NewStatus(framework.Success, "")
+	return framework.NewStatus(framework.Success)
 }
 
 func (ps *DiskIO) Unreserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) {

@@ -52,7 +52,7 @@ type ResourceIOContext struct {
 	PodRequests map[string]v1alpha1.IOBandwidth // poduid -> bw
 	// NsWhiteList keeps the list of namespaces that are exempt from disk io aware scheduling
 	NsWhiteList []string
-	queue       workqueue.RateLimitingInterface
+	Queue       workqueue.RateLimitingInterface
 	sync.Mutex
 }
 
@@ -72,20 +72,20 @@ func NewContext(rl workqueue.RateLimiter, wl []string, h framework.Handle) (*Res
 		PodRequests: make(map[string]v1alpha1.IOBandwidth),
 		NsWhiteList: wl,
 		VClient:     c,
-		queue:       queue,
+		Queue:       queue,
 	}, nil
 }
 
 func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
-	defer c.queue.ShutDown()
+	defer c.Queue.ShutDown()
 
 	for {
-		obj, shutdown := c.queue.Get()
+		obj, shutdown := c.Queue.Get()
 		if shutdown {
 			break
 		}
 		err := func() error {
-			defer c.queue.Done(obj)
+			defer c.Queue.Done(obj)
 
 			switch obj := obj.(type) {
 			case *SyncContext: // update Reserved Pod list to NodeDiskIOStats CR
@@ -101,10 +101,10 @@ func (c *ResourceIOContext) RunWorkerQueue(ctx context.Context) {
 		}()
 		if err != nil {
 			klog.Errorf("work queue handle data error: %v", err)
-			klog.Warningf("Retrying %#v after %d failures", obj, c.queue.NumRequeues(obj))
-			c.queue.AddRateLimited(obj)
+			klog.Warningf("Retrying %#v after %d failures", obj, c.Queue.NumRequeues(obj))
+			c.Queue.AddRateLimited(obj)
 		} else {
-			c.queue.Forget(obj)
+			c.Queue.Forget(obj)
 		}
 	}
 	<-ctx.Done()
@@ -177,7 +177,7 @@ func (c *ResourceIOContext) AddPod(pod *corev1.Pod, nodeName string, bw v1alpha1
 	pl = append(pl, string(pod.UID))
 	c.SetPodRequests(string(pod.UID), bw)
 	c.SetReservedPods(nodeName, pl)
-	c.queue.Add(&SyncContext{Node: nodeName})
+	c.Queue.Add(&SyncContext{Node: nodeName})
 	return nil
 }
 
@@ -198,6 +198,6 @@ func (c *ResourceIOContext) RemovePod(pod *corev1.Pod, nodeName string) error {
 	}
 	c.removePodRequest(string(pod.UID))
 	c.SetReservedPods(nodeName, v)
-	c.queue.Add(&SyncContext{Node: nodeName})
+	c.Queue.Add(&SyncContext{Node: nodeName})
 	return nil
 }
