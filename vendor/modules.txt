@@ -170,7 +170,7 @@ github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/intel/cloud-resource-scheduling-and-isolation v0.0.0-20231218065256-ab656695ae22 => ./cloud-resource-scheduling-and-isolation/
+# github.com/intel/cloud-resource-scheduling-and-isolation v0.1.0
 ## explicit; go 1.21
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio
 github.com/intel/cloud-resource-scheduling-and-isolation/pkg/api/diskio/v1alpha1
@@ -1651,4 +1651,3 @@ sigs.k8s.io/yaml
 # k8s.io/mount-utils => k8s.io/mount-utils v0.29.4
 # k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.29.4
 # k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.29.4
-# github.com/intel/cloud-resource-scheduling-and-isolation => ./cloud-resource-scheduling-and-isolation/

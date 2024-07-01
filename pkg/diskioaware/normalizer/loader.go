@@ -75,20 +75,16 @@ func (pl *PluginLoader) loadPlugin(ctx context.Context, p PlConfig) (string, err
 
 // DownloadFile will download a url to a local file.
 func downloadFile(ctx context.Context, client *http.Client, url string, filepath string) error {
-	// c, cancel := context.WithTimeout(ctx, defaultTimeout)
-	// defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
 
-	// klog.Infof("download begin %s", url)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download plugin: %v", err)
 	}
 	defer resp.Body.Close()
-	// klog.Infof("download done %s", url)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("received %v status code from %q", resp.StatusCode, url)

@@ -9,7 +9,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-logr/logr v1.3.0
 	github.com/google/go-cmp v0.6.0
-	github.com/intel/cloud-resource-scheduling-and-isolation v0.0.0-20231218065256-ab656695ae22
+	github.com/intel/cloud-resource-scheduling-and-isolation v0.1.0
 	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.1.2
 	github.com/k8stopologyawareschedwg/podfingerprint v0.2.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -184,5 +184,3 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.29.4
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.29.4
 )
-
-replace github.com/intel/cloud-resource-scheduling-and-isolation => ./cloud-resource-scheduling-and-isolation/

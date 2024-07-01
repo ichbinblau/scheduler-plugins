@@ -84,7 +84,6 @@ func (pm *NormalizerManager) Run(ctx context.Context, diskModelConfig string, wo
 				continue
 			}
 			pm.queue.Add(p)
-			// pm.LoadPlugin(ctx, p)
 		}
 	}
 	go wait.UntilWithContext(ctx, periodJob, resyncDuration)
